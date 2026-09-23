@@ -1,0 +1,315 @@
+{
+  "experiment_metadata": {
+    "experiment_id": "exp_arm1_trial_2",
+    "agent_arm": "Arm1_AutonomousAgent",
+    "model_base": "SmallTransformerLM",
+    "dataset_name": "SyntheticStateTransitionDyck",
+    "total_gpu_budget_hours": 1.0,
+    "start_timestamp": "2026-09-23T10:45:50.671628Z",
+    "end_timestamp": "2026-09-23T10:55:19.025754Z"
+  },
+  "nodes": [
+    {
+      "node_id": "hypo_0_2181",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T10:46:42.181387Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "Baseline SmallTransformerLM (6 layers, 256 dim, 4 heads, GELU, LayerNorm).",
+        "target_component": "attention",
+        "predicted_delta_loss": 0.0,
+        "provider": "ground_truth_baseline"
+      }
+    },
+    {
+      "node_id": "exp_0_2181",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T10:46:42.181402Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "Original unmodified model_baseline.py"
+      }
+    },
+    {
+      "node_id": "run_0_2181",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T10:46:42.181415Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 51.51,
+        "validation_loss": 7.0653,
+        "train_loss": 6.7714,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": true
+      }
+    },
+    {
+      "node_id": "refl_0_2181",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T10:46:42.181423Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Baseline established as reference anchor.",
+        "branch_decision": "ACCEPT_AND_EXTEND",
+        "self_detected_failure": false
+      }
+    },
+    {
+      "node_id": "hypo_1_42111",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T10:47:22.111374Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "The baseline model (6-layer, 256-dim, 4-head) likely underfits the algebraic state-transition task due to insufficient capacity to represent the compositional transition rules. Increasing depth and width while switching to RMSNorm and SiLU should improve representational power and gradient flow. A modest learning rate increase compensates for the larger model, while reduced weight decay prevents over-regularization of the expanded parameter space.",
+        "target_component": "depth_width",
+        "predicted_delta_loss": 0.45,
+        "provider": "nvidia"
+      }
+    },
+    {
+      "node_id": "exp_1_42111",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T10:47:22.111395Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "{'lr': 0.003, 'weight_decay': 0.005, 'n_layers': 8, 'n_heads': 8, 'd_model': 512, 'activation': 'silu', 'norm_type': 'rmsnorm', 'scale_factor': None}"
+      }
+    },
+    {
+      "node_id": "run_1_75463",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T10:49:35.463488Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 133.35,
+        "validation_loss": 7.1228,
+        "train_loss": 6.8119,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": false
+      }
+    },
+    {
+      "node_id": "refl_1_75463",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T10:49:35.463511Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Iteration 1 outcome: SUCCESS with decision REJECT_AND_BACKTRACK. Agent prediction was +0.4500. Provider: nvidia.",
+        "branch_decision": "REJECT_AND_BACKTRACK",
+        "self_detected_failure": false
+      }
+    },
+    {
+      "node_id": "hypo_2_69899",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T10:51:09.899692Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "The baseline model likely underfits the algebraic state-transition task due to limited multi-head attention capacity for capturing distinct transition rules. Increasing attention heads from 4 to 8 while holding model dimension constant (256) enhances representational diversity without excessive parameter growth. Switching to RMSNorm stabilizes gradient flow in deeper compositions, and SiLU provides smoother gradients than GeLU. A slightly reduced learning rate (0.0008) with increased weight decay (0.015) counters potential overfitting from the added heads.",
+        "target_component": "depth_width",
+        "predicted_delta_loss": 0.05,
+        "provider": "nvidia"
+      }
+    },
+    {
+      "node_id": "exp_2_69899",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T10:51:09.899739Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "{'lr': 0.0008, 'weight_decay': 0.015, 'n_layers': 6, 'n_heads': 8, 'd_model': 256, 'activation': 'silu', 'norm_type': 'rmsnorm', 'scale_factor': None}"
+      }
+    },
+    {
+      "node_id": "run_2_22275",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T10:52:02.275060Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 52.38,
+        "validation_loss": 7.0519,
+        "train_loss": 6.7984,
+        "relative_improvement_pct": 0.19,
+        "is_incumbent_best": true
+      }
+    },
+    {
+      "node_id": "refl_2_22275",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T10:52:02.275079Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Iteration 2 outcome: SUCCESS with decision ACCEPT_AND_EXTEND. Agent prediction was +0.0500. Provider: nvidia.",
+        "branch_decision": "ACCEPT_AND_EXTEND",
+        "self_detected_failure": false
+      }
+    },
+    {
+      "node_id": "hypo_3_50592",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T10:54:10.592796Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "The current best model (6 layers, 8 heads, 256 dim, SiLU, RMSNorm) shows a modest improvement by increasing attention head diversity. However, algebraic state-transition tasks often require deeper compositional reasoning across multiple time steps. The previous depth increase (Iteration 1) simultaneously widened the model and altered optimizer settings, confounding the effect of depth alone. Increasing layers to 8 while preserving the successful width, head count, activation, and normalization should enhance the model's capacity to iteratively refine state representations without introducing optimization instability. A learning rate of 0.001 (slightly higher than Iteration 2) compensates for the deeper gradient path, while weight decay of 0.01 balances regularization for the added parameters.",
+        "target_component": "depth_width",
+        "predicted_delta_loss": 0.02,
+        "provider": "nvidia"
+      }
+    },
+    {
+      "node_id": "exp_3_50592",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T10:54:10.592828Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "{'lr': 0.001, 'weight_decay': 0.01, 'n_layers': 8, 'n_heads': 8, 'd_model': 256, 'activation': 'silu', 'norm_type': 'rmsnorm', 'scale_factor': None}"
+      }
+    },
+    {
+      "node_id": "run_3_19024",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T10:55:19.024066Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 68.43,
+        "validation_loss": 7.077,
+        "train_loss": 6.692,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": false
+      }
+    },
+    {
+      "node_id": "refl_3_19024",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T10:55:19.024094Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Iteration 3 outcome: SUCCESS with decision REJECT_AND_BACKTRACK. Agent prediction was +0.0200. Provider: nvidia.",
+        "branch_decision": "REJECT_AND_BACKTRACK",
+        "self_detected_failure": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "e_1",
+      "source_node_id": "exp_0_2181",
+      "target_node_id": "hypo_0_2181",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_2",
+      "source_node_id": "run_0_2181",
+      "target_node_id": "exp_0_2181",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_3",
+      "source_node_id": "refl_0_2181",
+      "target_node_id": "run_0_2181",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_4",
+      "source_node_id": "hypo_1_42111",
+      "target_node_id": "hypo_0_2181",
+      "relationship_type": "BRANCHED_FROM"
+    },
+    {
+      "edge_id": "e_5",
+      "source_node_id": "exp_1_42111",
+      "target_node_id": "hypo_1_42111",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_6",
+      "source_node_id": "run_1_75463",
+      "target_node_id": "exp_1_42111",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_7",
+      "source_node_id": "refl_1_75463",
+      "target_node_id": "run_1_75463",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_8",
+      "source_node_id": "refl_1_75463",
+      "target_node_id": "hypo_1_42111",
+      "relationship_type": "ABANDONED_DEAD_END"
+    },
+    {
+      "edge_id": "e_9",
+      "source_node_id": "hypo_2_69899",
+      "target_node_id": "hypo_0_2181",
+      "relationship_type": "BRANCHED_FROM"
+    },
+    {
+      "edge_id": "e_10",
+      "source_node_id": "exp_2_69899",
+      "target_node_id": "hypo_2_69899",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_11",
+      "source_node_id": "run_2_22275",
+      "target_node_id": "exp_2_69899",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_12",
+      "source_node_id": "refl_2_22275",
+      "target_node_id": "run_2_22275",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_13",
+      "source_node_id": "hypo_3_50592",
+      "target_node_id": "hypo_2_69899",
+      "relationship_type": "BRANCHED_FROM"
+    },
+    {
+      "edge_id": "e_14",
+      "source_node_id": "exp_3_50592",
+      "target_node_id": "hypo_3_50592",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_15",
+      "source_node_id": "run_3_19024",
+      "target_node_id": "exp_3_50592",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_16",
+      "source_node_id": "refl_3_19024",
+      "target_node_id": "run_3_19024",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_17",
+      "source_node_id": "refl_3_19024",
+      "target_node_id": "hypo_3_50592",
+      "relationship_type": "ABANDONED_DEAD_END"
+    }
+  ],
+  "summary_statistics": {
+    "total_iterations": 3,
+    "total_gpu_hours_used": 0.0849,
+    "dead_end_ratio": 0.5,
+    "path_to_first_improvement_steps": 2,
+    "average_cycle_time_seconds": 142.09,
+    "backtracking_count": 2,
+    "final_best_loss": 7.0519,
+    "final_relative_improvement_pct": 0.82
+  }
+}

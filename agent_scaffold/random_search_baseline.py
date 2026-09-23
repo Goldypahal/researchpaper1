@@ -79,10 +79,11 @@ def sample_random_hyperparameters(seed=None):
 
 
 def run_random_search(experiment_id="exp_002_random_baseline", arm="Arm2_RandomSearchBaseline",
-                      dry_run=False, max_iterations=5, budget_hours=10.0, seed=42):
+                      dry_run=False, max_iterations=5, budget_hours=10.0, seed=42, task="dyck"):
     print("=== INITIALIZING RANDOM SEARCH HYPERPARAMETER BASELINE (ARM 2) ===")
     print(f"Experiment ID: {experiment_id}")
     print(f"Arm: {arm}")
+    print(f"Task Family: {task}")
     print(f"Max Iterations: {max_iterations}")
     print(f"GPU Budget: {budget_hours} Hours")
     print(f"Dry Run Mode: {dry_run}")
@@ -96,7 +97,7 @@ def run_random_search(experiment_id="exp_002_random_baseline", arm="Arm2_RandomS
     )
 
     harness_path = os.path.join(os.path.dirname(__file__), "eval_harness.py")
-    harness_base_args = ["--dry-run"] if dry_run else ["--no-dry-run", "--steps", "50"]
+    harness_base_args = ["--task", task] + (["--dry-run"] if dry_run else ["--no-dry-run", "--steps", "50"])
 
     # Run baseline evaluation (Iteration 0)
     print("[Iteration 0] Running Baseline Model Evaluation...")
@@ -108,6 +109,7 @@ def run_random_search(experiment_id="exp_002_random_baseline", arm="Arm2_RandomS
 
     base_loss = base_run["metrics"]["final_val_loss"]
     print(f"Baseline Validation Cross-Entropy Loss: {base_loss:.4f}\n")
+    logger.set_baseline_loss(base_loss)
 
     hypo_0 = logger.add_hypothesis(
         iteration_idx=0,
@@ -153,7 +155,7 @@ def run_random_search(experiment_id="exp_002_random_baseline", arm="Arm2_RandomS
         exp_id = logger.add_experiment_spec(it, hypo_id, str(sampled_params))
 
         # Build sandbox arguments
-        run_args = ["--dry-run"] if dry_run else ["--no-dry-run", "--steps", "50"]
+        run_args = ["--task", task] + (["--dry-run"] if dry_run else ["--no-dry-run", "--steps", "50"])
         run_args.extend(["--lr", str(sampled_params["lr"])])
         run_args.extend(["--weight-decay", str(sampled_params["weight_decay"])])
         run_args.extend(["--n-layers", str(sampled_params["n_layers"])])
@@ -244,11 +246,13 @@ if __name__ == "__main__":
     parser.set_defaults(dry_run=False)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--budget-hours", type=float, default=10.0)
+    parser.add_argument("--task", type=str, default="dyck", choices=["dyck", "fsm", "parity_legacy"])
     args = parser.parse_args()
 
     run_random_search(
         dry_run=args.dry_run,
         max_iterations=args.iterations,
         budget_hours=args.budget_hours,
-        seed=args.seed
+        seed=args.seed,
+        task=args.task
     )

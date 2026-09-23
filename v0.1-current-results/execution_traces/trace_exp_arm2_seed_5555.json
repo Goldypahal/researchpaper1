@@ -1,0 +1,315 @@
+{
+  "experiment_metadata": {
+    "experiment_id": "exp_arm2_seed_5555",
+    "agent_arm": "Arm2_RandomSearchBaseline",
+    "model_base": "SmallTransformerLM",
+    "dataset_name": "SyntheticStateTransitionDyck",
+    "total_gpu_budget_hours": 1.0,
+    "start_timestamp": "2026-09-23T14:22:28.109321Z",
+    "end_timestamp": "2026-09-23T14:29:56.492532Z"
+  },
+  "nodes": [
+    {
+      "node_id": "hypo_0_23737",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T14:23:43.737960Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "Baseline SmallTransformerLM (6 layers, 256 dim, 4 heads, GELU, LayerNorm).",
+        "target_component": "attention",
+        "predicted_delta_loss": 0.0,
+        "provider": "ground_truth_baseline"
+      }
+    },
+    {
+      "node_id": "exp_0_23737",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T14:23:43.737984Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "Original unmodified model_baseline.py"
+      }
+    },
+    {
+      "node_id": "run_0_23737",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T14:23:43.738004Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 75.63,
+        "validation_loss": 7.0653,
+        "train_loss": 6.7714,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": true
+      }
+    },
+    {
+      "node_id": "refl_0_23738",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T14:23:43.738018Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Baseline established as reference anchor.",
+        "branch_decision": "ACCEPT_AND_EXTEND",
+        "self_detected_failure": false
+      }
+    },
+    {
+      "node_id": "hypo_1_23738",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T14:23:43.738114Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "[RANDOM_UNIFORM] Sampled point in design space: lr=0.012356, wd=0.0222, layers=4, heads=4, d_model=128, act=silu, norm=layernorm.",
+        "target_component": "random_sampling",
+        "predicted_delta_loss": 0.0,
+        "provider": "random_uniform_sampler"
+      }
+    },
+    {
+      "node_id": "exp_1_23738",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T14:23:43.738131Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "{'lr': 0.012356, 'weight_decay': 0.0222, 'n_layers': 4, 'n_heads': 4, 'd_model': 128, 'activation': 'silu', 'norm_type': 'layernorm', 'scale_factor': None}"
+      }
+    },
+    {
+      "node_id": "run_1_63516",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T14:24:23.516620Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 39.78,
+        "validation_loss": 7.0312,
+        "train_loss": 6.8173,
+        "relative_improvement_pct": 0.48,
+        "is_incumbent_best": true
+      }
+    },
+    {
+      "node_id": "refl_1_63516",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T14:24:23.516651Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Iteration 1 outcome: SUCCESS with decision ACCEPT_AND_EXTEND. Sampled by random search.",
+        "branch_decision": "ACCEPT_AND_EXTEND",
+        "self_detected_failure": false
+      }
+    },
+    {
+      "node_id": "hypo_2_63519",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T14:24:23.519830Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "[RANDOM_UNIFORM] Sampled point in design space: lr=5.1e-05, wd=0.0698, layers=2, heads=2, d_model=512, act=gelu, norm=rmsnorm.",
+        "target_component": "random_sampling",
+        "predicted_delta_loss": 0.0,
+        "provider": "random_uniform_sampler"
+      }
+    },
+    {
+      "node_id": "exp_2_63519",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T14:24:23.519971Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "{'lr': 5.1e-05, 'weight_decay': 0.0698, 'n_layers': 2, 'n_heads': 2, 'd_model': 512, 'activation': 'gelu', 'norm_type': 'rmsnorm', 'scale_factor': 0.1}"
+      }
+    },
+    {
+      "node_id": "run_2_15935",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T14:28:35.935359Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 252.42,
+        "validation_loss": 7.0882,
+        "train_loss": 7.055,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": false
+      }
+    },
+    {
+      "node_id": "refl_2_15935",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T14:28:35.935397Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Iteration 2 outcome: SUCCESS with decision REJECT_AND_BACKTRACK. Sampled by random search.",
+        "branch_decision": "REJECT_AND_BACKTRACK",
+        "self_detected_failure": false
+      }
+    },
+    {
+      "node_id": "hypo_3_15937",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T14:28:35.937902Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "[RANDOM_UNIFORM] Sampled point in design space: lr=0.001103, wd=0.1143, layers=4, heads=2, d_model=256, act=relu, norm=layernorm.",
+        "target_component": "random_sampling",
+        "predicted_delta_loss": 0.0,
+        "provider": "random_uniform_sampler"
+      }
+    },
+    {
+      "node_id": "exp_3_15937",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T14:28:35.937953Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "{'lr': 0.001103, 'weight_decay': 0.1143, 'n_layers': 4, 'n_heads': 2, 'd_model': 256, 'activation': 'relu', 'norm_type': 'layernorm', 'scale_factor': 0.25}"
+      }
+    },
+    {
+      "node_id": "run_3_96488",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T14:29:56.488160Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 80.55,
+        "validation_loss": 7.0407,
+        "train_loss": 6.7996,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": false
+      }
+    },
+    {
+      "node_id": "refl_3_96488",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T14:29:56.488216Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Iteration 3 outcome: SUCCESS with decision REJECT_AND_BACKTRACK. Sampled by random search.",
+        "branch_decision": "REJECT_AND_BACKTRACK",
+        "self_detected_failure": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "e_1",
+      "source_node_id": "exp_0_23737",
+      "target_node_id": "hypo_0_23737",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_2",
+      "source_node_id": "run_0_23737",
+      "target_node_id": "exp_0_23737",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_3",
+      "source_node_id": "refl_0_23738",
+      "target_node_id": "run_0_23737",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_4",
+      "source_node_id": "hypo_1_23738",
+      "target_node_id": "hypo_0_23737",
+      "relationship_type": "BRANCHED_FROM"
+    },
+    {
+      "edge_id": "e_5",
+      "source_node_id": "exp_1_23738",
+      "target_node_id": "hypo_1_23738",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_6",
+      "source_node_id": "run_1_63516",
+      "target_node_id": "exp_1_23738",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_7",
+      "source_node_id": "refl_1_63516",
+      "target_node_id": "run_1_63516",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_8",
+      "source_node_id": "hypo_2_63519",
+      "target_node_id": "hypo_1_23738",
+      "relationship_type": "BRANCHED_FROM"
+    },
+    {
+      "edge_id": "e_9",
+      "source_node_id": "exp_2_63519",
+      "target_node_id": "hypo_2_63519",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_10",
+      "source_node_id": "run_2_15935",
+      "target_node_id": "exp_2_63519",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_11",
+      "source_node_id": "refl_2_15935",
+      "target_node_id": "run_2_15935",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_12",
+      "source_node_id": "refl_2_15935",
+      "target_node_id": "hypo_2_63519",
+      "relationship_type": "ABANDONED_DEAD_END"
+    },
+    {
+      "edge_id": "e_13",
+      "source_node_id": "hypo_3_15937",
+      "target_node_id": "hypo_1_23738",
+      "relationship_type": "BRANCHED_FROM"
+    },
+    {
+      "edge_id": "e_14",
+      "source_node_id": "exp_3_15937",
+      "target_node_id": "hypo_3_15937",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_15",
+      "source_node_id": "run_3_96488",
+      "target_node_id": "exp_3_15937",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_16",
+      "source_node_id": "refl_3_96488",
+      "target_node_id": "run_3_96488",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_17",
+      "source_node_id": "refl_3_96488",
+      "target_node_id": "hypo_3_15937",
+      "relationship_type": "ABANDONED_DEAD_END"
+    }
+  ],
+  "summary_statistics": {
+    "total_iterations": 3,
+    "total_gpu_hours_used": 0.1245,
+    "dead_end_ratio": 0.5,
+    "path_to_first_improvement_steps": 1,
+    "average_cycle_time_seconds": 0.0,
+    "backtracking_count": 2,
+    "final_best_loss": 7.0312,
+    "final_relative_improvement_pct": 1.12
+  }
+}

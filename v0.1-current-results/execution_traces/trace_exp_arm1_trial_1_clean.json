@@ -1,0 +1,321 @@
+{
+  "experiment_metadata": {
+    "experiment_id": "exp_arm1_trial_1_clean",
+    "agent_arm": "Arm1_AutonomousAgent",
+    "model_base": "SmallTransformerLM",
+    "dataset_name": "SyntheticStateTransitionDyck",
+    "total_gpu_budget_hours": 1.0,
+    "start_timestamp": "2026-09-23T11:35:51.230490Z",
+    "end_timestamp": "2026-09-23T11:43:50.295509Z"
+  },
+  "nodes": [
+    {
+      "node_id": "hypo_0_99330",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T11:36:39.330290Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "Baseline SmallTransformerLM (6 layers, 256 dim, 4 heads, GELU, LayerNorm).",
+        "target_component": "attention",
+        "predicted_delta_loss": 0.0,
+        "provider": "ground_truth_baseline"
+      }
+    },
+    {
+      "node_id": "exp_0_99330",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T11:36:39.330310Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "Original unmodified model_baseline.py"
+      }
+    },
+    {
+      "node_id": "run_0_99330",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T11:36:39.330329Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 48.1,
+        "validation_loss": 7.0653,
+        "train_loss": 6.7714,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": true
+      }
+    },
+    {
+      "node_id": "refl_0_99330",
+      "iteration_index": 0,
+      "timestamp": "2026-09-23T11:36:39.330340Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Baseline established as reference anchor.",
+        "branch_decision": "ACCEPT_AND_EXTEND",
+        "self_detected_failure": false
+      }
+    },
+    {
+      "node_id": "hypo_1_70725",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T11:37:50.725220Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "The baseline's weight decay of 0.01 is too strong for a small model on a deterministic synthetic algebraic task, causing underfitting. Reducing weight decay to 0.001 and increasing learning rate to 0.003 will allow the model to fit the training data better. Additionally, switching from LayerNorm to RMSNorm will improve gradient flow and training stability, which is beneficial for deeper compositions of algebraic operations.",
+        "target_component": "optimizer",
+        "predicted_delta_loss": 0.3,
+        "provider": "nvidia"
+      }
+    },
+    {
+      "node_id": "exp_1_70725",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T11:37:50.725263Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "{'lr': 0.003, 'weight_decay': 0.001, 'n_layers': 6, 'n_heads': 4, 'd_model': 256, 'activation': 'gelu', 'norm_type': 'rmsnorm', 'scale_factor': None}"
+      }
+    },
+    {
+      "node_id": "run_1_19734",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T11:38:39.734661Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 49.01,
+        "validation_loss": 7.1692,
+        "train_loss": 6.5594,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": false
+      }
+    },
+    {
+      "node_id": "refl_1_19734",
+      "iteration_index": 1,
+      "timestamp": "2026-09-23T11:38:39.734684Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Iteration 1 outcome: SUCCESS with decision REJECT_AND_BACKTRACK. Agent prediction was +0.3000. Provider: nvidia.",
+        "branch_decision": "REJECT_AND_BACKTRACK",
+        "self_detected_failure": false
+      }
+    },
+    {
+      "node_id": "hypo_2_7210",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T11:40:07.210999Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "The baseline model (6 layers, 256 d_model, 4 heads) may lack sufficient representational capacity to capture the precise algebraic state-transition rules, leading to underfitting. Increasing model width (d_model=512) and attention heads (n_heads=8) while keeping depth constant provides more expressive power for compositional operations without exacerbating optimization difficulties.",
+        "target_component": "depth_width",
+        "predicted_delta_loss": 0.05,
+        "provider": "nvidia"
+      }
+    },
+    {
+      "node_id": "exp_2_7211",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T11:40:07.211030Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "{'lr': 0.001, 'weight_decay': 0.01, 'n_layers': 6, 'n_heads': 8, 'd_model': 512, 'activation': 'gelu', 'norm_type': 'layernorm', 'scale_factor': None}"
+      }
+    },
+    {
+      "node_id": "run_2_99615",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T11:41:39.615804Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 92.4,
+        "validation_loss": 7.1609,
+        "train_loss": 6.5579,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": false
+      }
+    },
+    {
+      "node_id": "refl_2_99615",
+      "iteration_index": 2,
+      "timestamp": "2026-09-23T11:41:39.615830Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Iteration 2 outcome: SUCCESS with decision REJECT_AND_BACKTRACK. Agent prediction was +0.0500. Provider: nvidia.",
+        "branch_decision": "REJECT_AND_BACKTRACK",
+        "self_detected_failure": false
+      }
+    },
+    {
+      "node_id": "hypo_3_86831",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T11:43:06.831760Z",
+      "node_type": "Hypothesis",
+      "data": {
+        "hypothesis_text": "The GELU activation function's smooth, non-linear curvature may hinder the model's ability to learn exact algebraic state-transition rules, which are inherently piecewise linear or linear in nature. SiLU (Sigmoid Linear Unit) retains a linear regime for positive inputs while providing smooth gradients, offering a better inductive bias for precise compositional operations in deterministic synthetic tasks.",
+        "target_component": "activation",
+        "predicted_delta_loss": 0.05,
+        "provider": "nvidia"
+      }
+    },
+    {
+      "node_id": "exp_3_86831",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T11:43:06.831804Z",
+      "node_type": "ExperimentSpec",
+      "data": {
+        "code_patch": "{'lr': 0.001, 'weight_decay': 0.01, 'n_layers': 6, 'n_heads': 4, 'd_model': 256, 'activation': 'silu', 'norm_type': 'layernorm', 'scale_factor': None}"
+      }
+    },
+    {
+      "node_id": "run_3_30293",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T11:43:50.293986Z",
+      "node_type": "ExecutionRun",
+      "data": {
+        "execution_status": "SUCCESS",
+        "exit_code": 0,
+        "gpu_seconds_spent": 43.46,
+        "validation_loss": 7.069,
+        "train_loss": 6.7713,
+        "relative_improvement_pct": 0.0,
+        "is_incumbent_best": false
+      }
+    },
+    {
+      "node_id": "refl_3_30293",
+      "iteration_index": 3,
+      "timestamp": "2026-09-23T11:43:50.294002Z",
+      "node_type": "ReflectiveAnalysis",
+      "data": {
+        "agent_reflection": "Iteration 3 outcome: SUCCESS with decision REJECT_AND_BACKTRACK. Agent prediction was +0.0500. Provider: nvidia.",
+        "branch_decision": "REJECT_AND_BACKTRACK",
+        "self_detected_failure": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "e_1",
+      "source_node_id": "exp_0_99330",
+      "target_node_id": "hypo_0_99330",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_2",
+      "source_node_id": "run_0_99330",
+      "target_node_id": "exp_0_99330",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_3",
+      "source_node_id": "refl_0_99330",
+      "target_node_id": "run_0_99330",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_4",
+      "source_node_id": "hypo_1_70725",
+      "target_node_id": "hypo_0_99330",
+      "relationship_type": "BRANCHED_FROM"
+    },
+    {
+      "edge_id": "e_5",
+      "source_node_id": "exp_1_70725",
+      "target_node_id": "hypo_1_70725",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_6",
+      "source_node_id": "run_1_19734",
+      "target_node_id": "exp_1_70725",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_7",
+      "source_node_id": "refl_1_19734",
+      "target_node_id": "run_1_19734",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_8",
+      "source_node_id": "refl_1_19734",
+      "target_node_id": "hypo_1_70725",
+      "relationship_type": "ABANDONED_DEAD_END"
+    },
+    {
+      "edge_id": "e_9",
+      "source_node_id": "hypo_2_7210",
+      "target_node_id": "hypo_0_99330",
+      "relationship_type": "BRANCHED_FROM"
+    },
+    {
+      "edge_id": "e_10",
+      "source_node_id": "exp_2_7211",
+      "target_node_id": "hypo_2_7210",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_11",
+      "source_node_id": "run_2_99615",
+      "target_node_id": "exp_2_7211",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_12",
+      "source_node_id": "refl_2_99615",
+      "target_node_id": "run_2_99615",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_13",
+      "source_node_id": "refl_2_99615",
+      "target_node_id": "hypo_2_7210",
+      "relationship_type": "ABANDONED_DEAD_END"
+    },
+    {
+      "edge_id": "e_14",
+      "source_node_id": "hypo_3_86831",
+      "target_node_id": "hypo_0_99330",
+      "relationship_type": "BRANCHED_FROM"
+    },
+    {
+      "edge_id": "e_15",
+      "source_node_id": "exp_3_86831",
+      "target_node_id": "hypo_3_86831",
+      "relationship_type": "MOTIVATED_BY"
+    },
+    {
+      "edge_id": "e_16",
+      "source_node_id": "run_3_30293",
+      "target_node_id": "exp_3_86831",
+      "relationship_type": "IMPLEMENTED_AS"
+    },
+    {
+      "edge_id": "e_17",
+      "source_node_id": "refl_3_30293",
+      "target_node_id": "run_3_30293",
+      "relationship_type": "ANALYZED_BY"
+    },
+    {
+      "edge_id": "e_18",
+      "source_node_id": "refl_3_30293",
+      "target_node_id": "hypo_3_86831",
+      "relationship_type": "ABANDONED_DEAD_END"
+    }
+  ],
+  "summary_statistics": {
+    "total_iterations": 3,
+    "total_gpu_hours_used": 0.0647,
+    "dead_end_ratio": 0.75,
+    "path_to_first_improvement_steps": 0,
+    "average_cycle_time_seconds": 119.77,
+    "backtracking_count": 3,
+    "final_best_loss": 7.0653,
+    "final_relative_improvement_pct": 0.64
+  }
+}

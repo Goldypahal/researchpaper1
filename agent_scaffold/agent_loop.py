@@ -22,10 +22,12 @@ from llm_agent import LLMResearchAgent, SimulationDisallowedError
 
 def run_agent_loop(experiment_id="exp_001_transformer_opt", arm="Arm1_AutonomousAgent",
                    dry_run=False, max_iterations=5, budget_hours=10.0,
-                   llm_provider=None, llm_model=None, api_key=None, allow_simulation=False):
+                   llm_provider=None, llm_model=None, api_key=None, allow_simulation=False,
+                   task="dyck"):
     print(f"=== INITIALIZING AUTONOMOUS RESEARCH AGENT SCAFFOLD ===")
     print(f"Experiment ID: {experiment_id}")
     print(f"Arm: {arm}")
+    print(f"Task Family: {task}")
     print(f"Max Iterations: {max_iterations}")
     print(f"GPU Budget: {budget_hours} Hours")
     print(f"Dry Run Mode: {dry_run}")
@@ -51,7 +53,7 @@ def run_agent_loop(experiment_id="exp_001_transformer_opt", arm="Arm1_Autonomous
     )
 
     harness_path = os.path.join(os.path.dirname(__file__), "eval_harness.py")
-    harness_base_args = ["--dry-run"] if dry_run else ["--no-dry-run", "--steps", "50"]
+    harness_base_args = ["--task", task] + (["--dry-run"] if dry_run else ["--no-dry-run", "--steps", "50"])
 
     # Run baseline evaluation (Iteration 0)
     print("\n[Iteration 0] Running Baseline Model Evaluation...")
@@ -63,6 +65,7 @@ def run_agent_loop(experiment_id="exp_001_transformer_opt", arm="Arm1_Autonomous
 
     base_loss = base_run["metrics"]["final_val_loss"]
     print(f"Baseline Validation Cross-Entropy Loss: {base_loss:.4f}\n")
+    logger.set_baseline_loss(base_loss)
 
     hypo_0 = logger.add_hypothesis(
         iteration_idx=0,
@@ -274,6 +277,7 @@ if __name__ == "__main__":
                          help="Explicitly permit falling back to the scripted simulation when no API key/provider "
                               "is available. Only use this for plumbing/CI smoke tests. Output from these runs "
                               "must never be reported as real agent results.")
+    parser.add_argument("--task", type=str, default="dyck", choices=["dyck", "fsm", "parity_legacy"])
     args = parser.parse_args()
 
     run_agent_loop(
@@ -284,4 +288,5 @@ if __name__ == "__main__":
         llm_model=args.model,
         api_key=args.api_key,
         allow_simulation=args.allow_simulation,
+        task=args.task,
     )

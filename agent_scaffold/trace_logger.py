@@ -12,12 +12,13 @@ import os
 from datetime import datetime
 
 class TraceLogger:
-    def __init__(self, experiment_id, agent_arm="Arm1_AutonomousAgent", model_base="SmallTransformerLM", total_gpu_budget_hours=10.0):
+    def __init__(self, experiment_id, agent_arm="Arm1_AutonomousAgent", model_base="SmallTransformerLM", total_gpu_budget_hours=10.0, baseline_loss=None):
         self.experiment_id = experiment_id
         self.agent_arm = agent_arm
         self.model_base = model_base
         self.total_gpu_budget_hours = total_gpu_budget_hours
         self.start_time = datetime.utcnow().isoformat() + "Z"
+        self.baseline_loss = baseline_loss
         
         self.nodes = []
         self.edges = []
@@ -26,6 +27,10 @@ class TraceLogger:
         self.dead_ends = 0
         self.backtracks = 0
         self.cycle_times = []
+
+    def set_baseline_loss(self, loss):
+        """Sets or updates the reference baseline loss for relative improvement calculations."""
+        self.baseline_loss = float(loss)
 
     def add_hypothesis(self, iteration_idx, text, target_component, predicted_delta_loss, parent_hypo_id=None, provider=None):
         node_id = f"hypo_{iteration_idx}_{int(time.time()*1000)%100000}"
@@ -172,8 +177,13 @@ class TraceLogger:
                 "path_to_first_improvement_steps": self.path_to_first_improvement or 0,
                 "average_cycle_time_seconds": avg_cycle,
                 "backtracking_count": self.backtracks,
+                "baseline_loss": round(self.baseline_loss, 4) if self.baseline_loss is not None else None,
                 "final_best_loss": round(self.incumbent_best_loss, 4) if self.incumbent_best_loss != float('inf') else None,
-                "final_relative_improvement_pct": round(((7.1105 - self.incumbent_best_loss) / 7.1105) * 100, 2) if self.incumbent_best_loss != float('inf') else 0.0
+                "final_relative_improvement_pct": (
+                    round(((self.baseline_loss - self.incumbent_best_loss) / self.baseline_loss) * 100, 2)
+                    if (self.baseline_loss is not None and self.baseline_loss > 0 and self.incumbent_best_loss != float('inf'))
+                    else 0.0
+                )
             }
         }
 
