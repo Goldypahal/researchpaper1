@@ -1,0 +1,181 @@
+{
+  "task": "SyntheticStateTransitionDyck_SmallTransformer",
+  "iterations_per_run": 3,
+  "sample_size": "N=10 (Arm 1) vs N=10 (Arm 2)",
+  "provenance_note": "All Arm 1 trials drawn from identical post-fix pipeline (Nemotron-3 Ultra, STRICT mode). Arm 2 runs drawn from identical uniform/log-uniform random search baseline.",
+  "timestamp_utc": "2026-09-23T14:46:54Z",
+  "arm1_agent": {
+    "individual_runs": [
+      {
+        "trial": 1,
+        "final_best_loss": 7.0653,
+        "relative_gain_pct": 0.64,
+        "dead_end_ratio": 0.75,
+        "path_to_first_improvement": 0,
+        "status": "SUCCESS"
+      },
+      {
+        "trial": 2,
+        "final_best_loss": 7.0519,
+        "relative_gain_pct": 0.82,
+        "dead_end_ratio": 0.5,
+        "path_to_first_improvement": 2,
+        "status": "SUCCESS"
+      },
+      {
+        "trial": 3,
+        "final_best_loss": 7.0098,
+        "relative_gain_pct": 1.42,
+        "dead_end_ratio": 0.5,
+        "path_to_first_improvement": 2,
+        "status": "SUCCESS"
+      },
+      {
+        "trial": 4,
+        "final_best_loss": 7.0653,
+        "relative_gain_pct": 0.64,
+        "dead_end_ratio": 0.75,
+        "path_to_first_improvement": 0,
+        "status": "SUCCESS"
+      },
+      {
+        "trial": 5,
+        "final_best_loss": 6.9578,
+        "relative_gain_pct": 2.15,
+        "dead_end_ratio": 0.5,
+        "path_to_first_improvement": 1,
+        "status": "SUCCESS"
+      },
+      {
+        "trial": 6,
+        "experiment_id": "exp_arm1_trial_6",
+        "final_best_loss": 7.0653,
+        "relative_gain_pct": 0.64,
+        "dead_end_ratio": 0.75,
+        "path_to_first_improvement": 0,
+        "status": "SUCCESS"
+      },
+      {
+        "trial": 7,
+        "experiment_id": "exp_arm1_trial_7",
+        "final_best_loss": 7.0653,
+        "relative_gain_pct": 0.64,
+        "dead_end_ratio": 0.75,
+        "path_to_first_improvement": 0,
+        "status": "SUCCESS"
+      },
+      {
+        "trial": 8,
+        "experiment_id": "exp_arm1_trial_8",
+        "final_best_loss": 7.0652,
+        "relative_gain_pct": 0.64,
+        "dead_end_ratio": 0.5,
+        "path_to_first_improvement": 0,
+        "status": "SUCCESS"
+      },
+      {
+        "trial": 9,
+        "experiment_id": "exp_arm1_trial_9",
+        "final_best_loss": 7.0653,
+        "relative_gain_pct": 0.64,
+        "dead_end_ratio": 0.75,
+        "path_to_first_improvement": 0,
+        "status": "SUCCESS"
+      },
+      {
+        "trial": 10,
+        "experiment_id": "exp_arm1_trial_10",
+        "final_best_loss": 6.9989,
+        "relative_gain_pct": 1.57,
+        "dead_end_ratio": 0.5,
+        "path_to_first_improvement": 3,
+        "status": "SUCCESS"
+      }
+    ],
+    "distribution": {
+      "count": 10,
+      "mean": 7.04101,
+      "std": 0.0384779720532843,
+      "median": 7.06525,
+      "iqr": 0.04497499999999999,
+      "min_best": 6.9578,
+      "max_worst": 7.0653
+    }
+  },
+  "arm2_random": {
+    "individual_runs": [
+      {
+        "seed": 42,
+        "final_best_loss": 6.9918,
+        "status": "SUCCESS"
+      },
+      {
+        "seed": 101,
+        "final_best_loss": 6.9818,
+        "status": "SUCCESS"
+      },
+      {
+        "seed": 777,
+        "final_best_loss": 6.9297,
+        "status": "SUCCESS"
+      },
+      {
+        "seed": 999,
+        "final_best_loss": 6.9496,
+        "status": "SUCCESS"
+      },
+      {
+        "seed": 2026,
+        "final_best_loss": 7.0653,
+        "status": "SUCCESS"
+      },
+      {
+        "seed": 1234,
+        "experiment_id": "exp_arm2_seed_1234",
+        "final_best_loss": 6.9462,
+        "status": "SUCCESS"
+      },
+      {
+        "seed": 4321,
+        "experiment_id": "exp_arm2_seed_4321",
+        "final_best_loss": 7.0653,
+        "status": "SUCCESS"
+      },
+      {
+        "seed": 5555,
+        "experiment_id": "exp_arm2_seed_5555",
+        "final_best_loss": 7.0312,
+        "status": "SUCCESS"
+      },
+      {
+        "seed": 8888,
+        "experiment_id": "exp_arm2_seed_8888",
+        "final_best_loss": 6.9637,
+        "status": "SUCCESS"
+      },
+      {
+        "seed": 9999,
+        "experiment_id": "exp_arm2_seed_9999",
+        "final_best_loss": 7.0018,
+        "status": "SUCCESS"
+      }
+    ],
+    "distribution": {
+      "count": 10,
+      "mean": 6.99264,
+      "std": 0.048368979958463086,
+      "median": 6.9868,
+      "iqr": 0.07072500000000037,
+      "min_best": 6.9297,
+      "max_worst": 7.0653
+    }
+  },
+  "statistical_tests": {
+    "welch_t_stat": 2.4747880360324888,
+    "welch_p_val": 0.024068970238977257,
+    "mann_whitney_u": 77.0,
+    "mann_whitney_p_val": 0.04068117564227169,
+    "cohens_d": 1.1067588556943688,
+    "statistically_significant_05": true
+  }
+}

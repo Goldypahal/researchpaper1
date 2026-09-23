@@ -1,0 +1,146 @@
+{
+  "arm1_results": [
+    {
+      "trial": 1,
+      "final_best_loss": 7.0653,
+      "relative_gain_pct": 0.64,
+      "dead_end_ratio": 0.75,
+      "path_to_first_improvement": 0,
+      "status": "SUCCESS"
+    },
+    {
+      "trial": 2,
+      "final_best_loss": 7.0519,
+      "relative_gain_pct": 0.82,
+      "dead_end_ratio": 0.5,
+      "path_to_first_improvement": 2,
+      "status": "SUCCESS"
+    },
+    {
+      "trial": 3,
+      "final_best_loss": 7.0098,
+      "relative_gain_pct": 1.42,
+      "dead_end_ratio": 0.5,
+      "path_to_first_improvement": 2,
+      "status": "SUCCESS"
+    },
+    {
+      "trial": 4,
+      "final_best_loss": 7.0653,
+      "relative_gain_pct": 0.64,
+      "dead_end_ratio": 0.75,
+      "path_to_first_improvement": 0,
+      "status": "SUCCESS"
+    },
+    {
+      "trial": 5,
+      "final_best_loss": 6.9578,
+      "relative_gain_pct": 2.15,
+      "dead_end_ratio": 0.5,
+      "path_to_first_improvement": 1,
+      "status": "SUCCESS"
+    },
+    {
+      "trial": 6,
+      "experiment_id": "exp_arm1_trial_6",
+      "final_best_loss": 7.0653,
+      "relative_gain_pct": 0.64,
+      "dead_end_ratio": 0.75,
+      "path_to_first_improvement": 0,
+      "status": "SUCCESS"
+    },
+    {
+      "trial": 7,
+      "experiment_id": "exp_arm1_trial_7",
+      "final_best_loss": 7.0653,
+      "relative_gain_pct": 0.64,
+      "dead_end_ratio": 0.75,
+      "path_to_first_improvement": 0,
+      "status": "SUCCESS"
+    },
+    {
+      "trial": 8,
+      "experiment_id": "exp_arm1_trial_8",
+      "final_best_loss": 7.0652,
+      "relative_gain_pct": 0.64,
+      "dead_end_ratio": 0.5,
+      "path_to_first_improvement": 0,
+      "status": "SUCCESS"
+    },
+    {
+      "trial": 9,
+      "experiment_id": "exp_arm1_trial_9",
+      "final_best_loss": 7.0653,
+      "relative_gain_pct": 0.64,
+      "dead_end_ratio": 0.75,
+      "path_to_first_improvement": 0,
+      "status": "SUCCESS"
+    },
+    {
+      "trial": 10,
+      "experiment_id": "exp_arm1_trial_10",
+      "final_best_loss": 6.9989,
+      "relative_gain_pct": 1.57,
+      "dead_end_ratio": 0.5,
+      "path_to_first_improvement": 3,
+      "status": "SUCCESS"
+    }
+  ],
+  "arm2_results": [
+    {
+      "seed": 42,
+      "final_best_loss": 6.9918,
+      "status": "SUCCESS"
+    },
+    {
+      "seed": 101,
+      "final_best_loss": 6.9818,
+      "status": "SUCCESS"
+    },
+    {
+      "seed": 777,
+      "final_best_loss": 6.9297,
+      "status": "SUCCESS"
+    },
+    {
+      "seed": 999,
+      "final_best_loss": 6.9496,
+      "status": "SUCCESS"
+    },
+    {
+      "seed": 2026,
+      "final_best_loss": 7.0653,
+      "status": "SUCCESS"
+    },
+    {
+      "seed": 1234,
+      "experiment_id": "exp_arm2_seed_1234",
+      "final_best_loss": 6.9462,
+      "status": "SUCCESS"
+    },
+    {
+      "seed": 4321,
+      "experiment_id": "exp_arm2_seed_4321",
+      "final_best_loss": 7.0653,
+      "status": "SUCCESS"
+    },
+    {
+      "seed": 5555,
+      "experiment_id": "exp_arm2_seed_5555",
+      "final_best_loss": 7.0312,
+      "status": "SUCCESS"
+    },
+    {
+      "seed": 8888,
+      "experiment_id": "exp_arm2_seed_8888",
+      "final_best_loss": 6.9637,
+      "status": "SUCCESS"
+    },
+    {
+      "seed": 9999,
+      "experiment_id": "exp_arm2_seed_9999",
+      "final_best_loss": 7.0018,
+      "status": "SUCCESS"
+    }
+  ]
+}

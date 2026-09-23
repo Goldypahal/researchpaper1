@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentExecutionTraceSchema",
+  "description": "Formal node/edge schema for tracking the iterative hypothesis -> experiment -> run -> metric -> reflection cycle in autonomous AI research.",
+  "type": "object",
+  "required": ["experiment_metadata", "nodes", "edges", "summary_statistics"],
+  "properties": {
+    "experiment_metadata": {
+      "type": "object",
+      "required": ["experiment_id", "agent_arm", "model_base", "total_gpu_budget_hours", "start_timestamp"],
+      "properties": {
+        "experiment_id": { "type": "string" },
+        "agent_arm": { "type": "string", "enum": ["Arm1_AutonomousAgent", "Arm2_RandomSearch", "Arm3_HumanEngineer"] },
+        "model_base": { "type": "string" },
+        "dataset_name": { "type": "string" },
+        "total_gpu_budget_hours": { "type": "number", "minimum": 0 },
+        "start_timestamp": { "type": "string", "format": "date-time" },
+        "end_timestamp": { "type": "string" }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["node_id", "node_type", "timestamp", "iteration_index"],
+        "properties": {
+          "node_id": { "type": "string" },
+          "iteration_index": { "type": "integer", "minimum": 0 },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "node_type": { 
+            "type": "string", 
+            "enum": ["Hypothesis", "ExperimentSpec", "ExecutionRun", "MetricResult", "ReflectiveAnalysis"] 
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "hypothesis_text": { "type": "string" },
+              "target_component": { "type": "string", "enum": ["attention", "activation", "normalization", "optimizer", "depth_width"] },
+              "predicted_delta_loss": { "type": "number" },
+              "code_patch": { "type": "string" },
+              "execution_status": { "type": "string", "enum": ["SUCCESS", "SYNTAX_ERROR", "RUNTIME_CRASH", "TIMEOUT", "DIVERGED"] },
+              "exit_code": { "type": "integer" },
+              "gpu_seconds_spent": { "type": "number" },
+              "validation_loss": { "type": "number" },
+              "train_loss": { "type": "number" },
+              "relative_improvement_pct": { "type": "number" },
+              "is_incumbent_best": { "type": "boolean" },
+              "agent_reflection": { "type": "string" },
+              "self_detected_failure": { "type": "boolean" },
+              "branch_decision": { "type": "string", "enum": ["ACCEPT_AND_EXTEND", "REJECT_AND_BACKTRACK", "TERMINATE_PLATEAU"] },
+              "provider": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["edge_id", "source_node_id", "target_node_id", "relationship_type"],
+        "properties": {
+          "edge_id": { "type": "string" },
+          "source_node_id": { "type": "string" },
+          "target_node_id": { "type": "string" },
+          "relationship_type": {
+            "type": "string",
+            "enum": [
+              "MOTIVATED_BY",
+              "IMPLEMENTED_AS",
+              "EVALUATED_IN",
+              "PRODUCED_METRIC",
+              "ANALYZED_BY",
+              "BRANCHED_FROM",
+              "ABANDONED_DEAD_END",
+              "BACKTRACKED_TO"
+            ]
+          }
+        }
+      }
+    },
+    "summary_statistics": {
+      "type": "object",
+      "required": [
+        "total_iterations",
+        "total_gpu_hours_used",
+        "dead_end_ratio",
+        "path_to_first_improvement_steps",
+        "average_cycle_time_seconds",
+        "backtracking_count",
+        "final_best_loss",
+        "final_relative_improvement_pct"
+      ],
+      "properties": {
+        "total_iterations": { "type": "integer" },
+        "total_gpu_hours_used": { "type": "number" },
+        "dead_end_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "path_to_first_improvement_steps": { "type": "integer" },
+        "average_cycle_time_seconds": { "type": "number" },
+        "backtracking_count": { "type": "integer" },
+        "final_best_loss": { "type": "number" },
+        "final_relative_improvement_pct": { "type": "number" }
+      }
+    }
+  }
+}
