@@ -388,6 +388,52 @@
       },
       "timestamp": "2026-09-24T08:39:25Z",
       "status": "COMPLETED"
+    },
+    {
+      "experiment_id": "EXP-PHASE8-DYCK-RANDOM-SEED-42",
+      "git_commit": "bebf551a3d02e4cf0c058c42a2d48c8b25cb48bb",
+      "task": "dyck",
+      "method": "random",
+      "seed": 42,
+      "model": "random_search_agent",
+      "budget": "K=1, 0.0s GPU",
+      "dataset_version": "dyck_v1_0",
+      "prompt_version": "N/A",
+      "result": {
+        "baseline_loss": 4.296156,
+        "best_val_loss": 4.296156,
+        "best_ood_loss": 4.231418,
+        "improvement_pct": 0.0,
+        "auc_normalized_gain": 0.0,
+        "auc_search_curve": 0.0,
+        "raw_loss_auc": 0.0,
+        "gpu_seconds": 0.0
+      },
+      "timestamp": "2026-09-24T10:48:58Z",
+      "status": "COMPLETED"
+    },
+    {
+      "experiment_id": "EXP-PHASE8-DYCK-LLM-SEED-42",
+      "git_commit": "bebf551a3d02e4cf0c058c42a2d48c8b25cb48bb",
+      "task": "dyck",
+      "method": "llm",
+      "seed": 42,
+      "model": "llm_search_agent",
+      "budget": "K=1, 0.0s GPU",
+      "dataset_version": "dyck_v1_0",
+      "prompt_version": "SYSTEM_PROMPT_v2_0",
+      "result": {
+        "baseline_loss": 4.296156,
+        "best_val_loss": 4.296156,
+        "best_ood_loss": 4.231418,
+        "improvement_pct": 0.0,
+        "auc_normalized_gain": 0.0,
+        "auc_search_curve": 0.0,
+        "raw_loss_auc": 0.0,
+        "gpu_seconds": 0.0
+      },
+      "timestamp": "2026-09-24T10:49:50Z",
+      "status": "COMPLETED"
     }
   ],
   "registry_specification": {

@@ -1,0 +1,108 @@
+{
+  "method": "llm",
+  "task": "dyck",
+  "seed": 42,
+  "baseline_val_loss": 4.296156,
+  "best_val_loss": 4.296156,
+  "best_ood_loss": 4.231418,
+  "improvement_pct": 0.0,
+  "total_eval_wall_clock_sec": 0.0,
+  "total_gpu_seconds": 0.0,
+  "auc_normalized_gain": 0.0,
+  "raw_loss_auc": 0.0,
+  "auc_search_curve": 0.0,
+  "calibration_report": {
+    "n_predictions": 1,
+    "mae": 0.051523,
+    "directional_accuracy_pct": 0.0,
+    "spearman_rank_correlation": {
+      "rho": NaN,
+      "p_value": NaN
+    },
+    "confidence_binned_calibration": [
+      {
+        "bin": "[0.02, 0.05)",
+        "count": 1,
+        "mean_predicted": 0.045,
+        "mean_actual": -0.006523,
+        "bin_error": 0.051523
+      }
+    ]
+  },
+  "calibration_mae": 0.051523,
+  "trajectory": [
+    {
+      "iteration": 0,
+      "config": {
+        "lr": 0.001,
+        "weight_decay": 0.01,
+        "d_model": 256,
+        "n_layers": 6,
+        "n_heads": 4,
+        "d_ff": 1024,
+        "activation": "gelu",
+        "norm_type": "layernorm",
+        "scale_factor": null,
+        "pos_encoding": "learned",
+        "ffn_type": "standard",
+        "topology": "pre_ln",
+        "n_kv_heads": null
+      },
+      "train_loss": 4.723204,
+      "val_loss": 4.296156,
+      "ood_loss": 4.231418,
+      "val_struct_acc": 47.29,
+      "ood_struct_acc": 43.13,
+      "gap_rel": -0.015069,
+      "gpu_seconds": 0.0,
+      "cumulative_gpu_sec": 0.0,
+      "best_val_loss": 4.296156,
+      "hypothesis": "Default Baseline Transformer",
+      "predicted_delta_loss": 0.0,
+      "actual_delta_loss": 0.0
+    },
+    {
+      "iteration": 1,
+      "config": {
+        "lr": 0.001,
+        "weight_decay": 0.01,
+        "n_layers": 4,
+        "n_heads": 4,
+        "d_model": 256,
+        "activation": "gelu",
+        "norm_type": "rmsnorm",
+        "pos_encoding": "rotary",
+        "ffn_type": "swiglu",
+        "topology": "pre_ln",
+        "scale_factor": null,
+        "n_kv_heads": null,
+        "d_ff": 1024
+      },
+      "train_loss": 4.776232,
+      "val_loss": 4.302679,
+      "ood_loss": 4.230005,
+      "val_struct_acc": 46.79,
+      "ood_struct_acc": 42.47,
+      "gap_rel": -0.01689,
+      "eval_wall_clock_sec": 0.0,
+      "gpu_seconds": 0.0,
+      "cumulative_wall_clock_sec": 0.0,
+      "cumulative_gpu_sec": 0.0,
+      "best_val_loss": 4.296156,
+      "hypothesis": "[SEMANTIC REFLECTION] For DYCK sequence modeling, Rotary Position Embeddings (RoPE) and RMSNorm preserve token distance representations across nested bracket closures.",
+      "predicted_delta_loss": 0.045,
+      "actual_delta_loss": -0.006523,
+      "prompt_hash": "0168ec657a23d023",
+      "raw_response": "{\n  \"hypothesis_text\": \"[SEMANTIC REFLECTION] For DYCK sequence modeling, Rotary Position Embeddings (RoPE) and RMSNorm preserve token distance representations across nested bracket closures.\",\n  \"target_component\": \"positional_encoding\",\n  \"predicted_delta_loss\": 0.045,\n  \"modifications\": {\n    \"lr\": 0.001,\n    \"weight_decay\": 0.01,\n    \"n_layers\": 4,\n    \"n_heads\": 4,\n    \"d_model\": 256,\n    \"activation\": \"gelu\",\n    \"norm_type\": \"rmsnorm\",\n    \"pos_encoding\": \"rotary\",\n    \"ffn_type\": \"swiglu\",\n    \"topology\": \"pre_ln\",\n    \"scale_factor\": null\n  },\n  \"reasoning\": \"Rotary encoding and SwiGLU inductive bias for hierarchical sequence grammar.\"\n}",
+      "proposal_metadata": {
+        "prompt_hash": "0168ec657a23d023",
+        "raw_response": "{\n  \"hypothesis_text\": \"[SEMANTIC REFLECTION] For DYCK sequence modeling, Rotary Position Embeddings (RoPE) and RMSNorm preserve token distance representations across nested bracket closures.\",\n  \"target_component\": \"positional_encoding\",\n  \"predicted_delta_loss\": 0.045,\n  \"modifications\": {\n    \"lr\": 0.001,\n    \"weight_decay\": 0.01,\n    \"n_layers\": 4,\n    \"n_heads\": 4,\n    \"d_model\": 256,\n    \"activation\": \"gelu\",\n    \"norm_type\": \"rmsnorm\",\n    \"pos_encoding\": \"rotary\",\n    \"ffn_type\": \"swiglu\",\n    \"topology\": \"pre_ln\",\n    \"scale_factor\": null\n  },\n  \"reasoning\": \"Rotary encoding and SwiGLU inductive bias for hierarchical sequence grammar.\"\n}",
+        "provider": "adaptive_simulation",
+        "model": "adaptive_simulation",
+        "reasoning_mode": "full",
+        "latency_seconds": 0.0,
+        "critic_prompt_hash": null
+      }
+    }
+  ]
+}

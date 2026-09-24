@@ -55,7 +55,7 @@ class ComparativeSearchBenchmark:
         seed: int = 42,
         max_iterations: int = 10,
         steps_per_candidate: int = 60,
-        eval_timeout: float = 120.0
+        eval_timeout: float = 300.0
     ):
         self.task = task.lower()
         self.seed = seed
@@ -69,13 +69,21 @@ class ComparativeSearchBenchmark:
         method = method.lower()
         rng = random.Random(self.seed)
         
-        # Step 0: Baseline anchor
+        # Step 0: Baseline anchor with timeout resiliency
         baseline_cfg = get_default_baseline()
-        base_res = self.evaluator.train_and_evaluate_candidate(
-            config=baseline_cfg,
-            max_steps=self.steps_per_candidate,
-            timeout_seconds=self.eval_timeout
-        )
+        try:
+            base_res = self.evaluator.train_and_evaluate_candidate(
+                config=baseline_cfg,
+                max_steps=self.steps_per_candidate,
+                timeout_seconds=self.eval_timeout
+            )
+        except TimeoutError:
+            print(f"  [Seed {self.seed}] Step 0 baseline timed out (> {self.eval_timeout}s). Evaluating with reduced steps.")
+            base_res = self.evaluator.train_and_evaluate_candidate(
+                config=baseline_cfg,
+                max_steps=max(5, self.steps_per_candidate // 2),
+                timeout_seconds=self.eval_timeout
+            )
         
         history: List[Dict[str, Any]] = [{
             "iteration": 0,
@@ -120,6 +128,9 @@ class ComparativeSearchBenchmark:
         for it in range(1, self.max_iterations + 1):
             pred_delta = 0.0
             hypo_text = ""
+            prompt_hash = None
+            raw_response = None
+            proposal_metadata = {}
 
             if method == "random":
                 cand_cfg = sample_random_candidate(rng)
@@ -149,11 +160,22 @@ class ComparativeSearchBenchmark:
                         if k not in cand_cfg:
                             cand_cfg[k] = v
                     cand_cfg = sanitize_configuration(cand_cfg)
-                    hypo_text = proposal.get("hypothesis", f"LLM hypothesis #{it}")
+                    hypo_text = proposal.get("hypothesis", proposal.get("hypothesis_text", f"LLM hypothesis #{it}"))
                     pred_delta = float(proposal.get("predicted_delta_loss", 0.0))
+                    prompt_hash = proposal.get("prompt_hash")
+                    raw_response = proposal.get("raw_response")
+                    proposal_metadata = {
+                        "prompt_hash": prompt_hash,
+                        "raw_response": raw_response,
+                        "provider": proposal.get("provider"),
+                        "model": proposal.get("model"),
+                        "reasoning_mode": proposal.get("reasoning_mode"),
+                        "latency_seconds": proposal.get("latency_seconds"),
+                        "critic_prompt_hash": proposal.get("critic_prompt_hash")
+                    }
                 except Exception as e:
-                    cand_cfg = sample_random_candidate(rng)
-                    hypo_text = f"LLM fallback random proposal due to error: {e}"
+                    print(f"    [Iteration {it}] FATAL LLM PROPOSAL ERROR: {type(e).__name__}: {e}")
+                    raise RuntimeError(f"LLM Agent proposal failed at iteration {it}: {e}") from e
 
             # Immutable Evaluation with robust failure recovery
             try:
@@ -208,7 +230,7 @@ class ComparativeSearchBenchmark:
 
             cum_gpu_sec += eval_res["gpu_seconds"]
 
-            history.append({
+            h_entry = {
                 "iteration": it,
                 "config": cand_cfg,
                 "train_loss": eval_res["train_loss"],
@@ -217,19 +239,26 @@ class ComparativeSearchBenchmark:
                 "val_struct_acc": eval_res["val_struct_acc"],
                 "ood_struct_acc": eval_res["ood_struct_acc"],
                 "gap_rel": eval_res["generalization_gap_rel"],
+                "eval_wall_clock_sec": eval_res["gpu_seconds"],
                 "gpu_seconds": eval_res["gpu_seconds"],
+                "cumulative_wall_clock_sec": round(cum_gpu_sec, 3),
                 "cumulative_gpu_sec": round(cum_gpu_sec, 3),
                 "best_val_loss": best_val,
                 "hypothesis": hypo_text,
                 "predicted_delta_loss": pred_delta,
-                "actual_delta_loss": actual_delta
-            })
+                "actual_delta_loss": actual_delta,
+                "prompt_hash": prompt_hash,
+                "raw_response": raw_response
+            }
+            if proposal_metadata:
+                h_entry["proposal_metadata"] = proposal_metadata
+            history.append(h_entry)
 
         # Calculate Search Efficiency (Normalized Performance Gain AUC - Higher is Better)
-        gpu_times = [h["cumulative_gpu_sec"] for h in history]
+        wall_times = [h["cumulative_gpu_sec"] for h in history]
         best_losses = [h["best_val_loss"] for h in history]
-        auc_gain = calculate_normalized_gain_auc(gpu_times, best_losses, base_res["val_loss"])
-        raw_loss_auc = calculate_auc_search_curve(gpu_times, best_losses)
+        auc_gain = calculate_normalized_gain_auc(wall_times, best_losses, base_res["val_loss"])
+        raw_loss_auc = calculate_auc_search_curve(wall_times, best_losses)
 
         # Extended Hypothesis Calibration for LLM
         calibration_report = None
@@ -242,6 +271,34 @@ class ComparativeSearchBenchmark:
         if calibration_report and isinstance(calibration_report, dict) and "mae" in calibration_report:
             calib_mae = calibration_report["mae"]
 
+        # Write trajectory.jsonl alongside trace
+        traces_dir = os.path.join(os.path.dirname(__file__), "traces")
+        os.makedirs(traces_dir, exist_ok=True)
+        jsonl_filename = f"trajectory_{self.task}_{method}_seed_{self.seed}.jsonl"
+        if method == "llm" and llm_mode != "full":
+            jsonl_filename = f"trajectory_{self.task}_{method}_{llm_mode}_seed_{self.seed}.jsonl"
+        jsonl_path = os.path.join(traces_dir, jsonl_filename)
+        with open(jsonl_path, "w") as jf:
+            for entry in history:
+                row = {
+                    "task": self.task,
+                    "method": method,
+                    "seed": self.seed,
+                    "iteration": entry["iteration"],
+                    "config": entry["config"],
+                    "val_loss": entry["val_loss"],
+                    "ood_loss": entry["ood_loss"],
+                    "eval_wall_clock_sec": entry.get("eval_wall_clock_sec", entry.get("gpu_seconds")),
+                    "best_val_loss": entry["best_val_loss"],
+                    "hypothesis": entry["hypothesis"],
+                    "predicted_delta_loss": entry["predicted_delta_loss"],
+                    "actual_delta_loss": entry["actual_delta_loss"],
+                    "prompt_hash": entry.get("prompt_hash")
+                }
+                if "proposal_metadata" in entry:
+                    row["proposal_metadata"] = entry["proposal_metadata"]
+                jf.write(json.dumps(row) + "\n")
+
         return {
             "method": method,
             "task": self.task,
@@ -250,6 +307,7 @@ class ComparativeSearchBenchmark:
             "best_val_loss": best_val,
             "best_ood_loss": best_ood,
             "improvement_pct": round(((base_res["val_loss"] - best_val) / base_res["val_loss"]) * 100.0, 2),
+            "total_eval_wall_clock_sec": round(cum_gpu_sec, 3),
             "total_gpu_seconds": round(cum_gpu_sec, 3),
             "auc_normalized_gain": auc_gain,
             "raw_loss_auc": raw_loss_auc,

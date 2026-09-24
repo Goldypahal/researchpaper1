@@ -121,10 +121,11 @@ def calculate_normalized_gain_auc(
     base_loss: float
 ) -> float:
     r"""
-    Calculates Area Under the Normalized Performance Gain Curve:
+    Calculates Mean Area Under the Normalized Performance Gain Curve:
       Gain(b) = max(0.0, base_loss - L*(b)) / max(1e-8, base_loss)
-      AUC_gain = \int_0^B Gain(b) db
+      AUC_gain = \frac{1}{B} \int_0^B Gain(b) db
     HIGHER is strictly better: reflects discovering larger performance gains earlier in the search budget.
+    Normalized into [0, 1].
     """
     x = np.asarray(compute_points, dtype=np.float64)
     losses = np.asarray(incumbent_losses, dtype=np.float64)
@@ -135,7 +136,10 @@ def calculate_normalized_gain_auc(
     losses_sorted = losses[sort_idx]
     denom = max(1e-8, base_loss)
     gains = np.maximum(0.0, (base_loss - losses_sorted) / denom)
-    auc = np.trapz(gains, x_sorted)
+    total_range = x_sorted[-1] - x_sorted[0]
+    if total_range <= 0.0:
+        return round(float(gains[0]), 6)
+    auc = np.trapz(gains, x_sorted) / total_range
     return round(float(auc), 6)
 
 

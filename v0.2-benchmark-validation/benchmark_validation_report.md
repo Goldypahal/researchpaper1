@@ -38,7 +38,9 @@
 ---
 
 ## 3. Key Findings & Sanity Checks
-- **Generalization Gap Exists and is Statistically Robust**: On both benchmarks, $L_{\text{OOD}} > L_{\text{val}}$ across all seeds, proving that out-of-distribution evaluation targets genuinely test inductive generalization beyond in-distribution training boundaries.
+- **Task-Dependent OOD Generalization Behavior**: 
+  - **Hidden FSM** demonstrates a clear, statistically robust OOD degradation across all seeds ($L_{\text{val}}=2.6628 \to L_{\text{OOD}}=2.8896$, mean gap $+8.54\%$, $p < 0.001$), confirming that doubling the state space from $|S|=8$ to $|S|=16$ reliably stresses temporal state tracking boundaries.
+  - **Dyck-4** does *not* exhibit an aggregate OOD degradation under this specific baseline configuration ($L_{\text{val}}=4.1800 \to L_{\text{OOD}}=4.1533$, mean gap $-0.63\%$; OOD loss is lower in 4 out of 5 seeds). Under the small baseline capacity ($d_{\text{model}}=128$), the model predicts unbracketed distractor tokens similarly across nesting depths. Rather than forcing a uniform generalization narrative, benchmark grammar complexity serves as an experimental factor distinguishing regular from hierarchical inductive limits.
 - **Zero Dataset Contamination**: Cryptographic SHA-256 validation confirmed that $D_{\text{train}} \cap D_{\text{val}} = \emptyset$ and $D_{\text{train}} \cap D_{\text{test}} = \emptyset$.
-- **Deterministic Reproducibility**: Seed control guarantees bitwise reproducible tensor streams and stable metric distributions.
-- **Ready for Autonomous Search**: The benchmarks exhibit consistent, non-trivial learning dynamics, serving as the rigorous foundation for comparative search optimization.
+- **Seed Control & Determinism**: Experiments fix RNG seeds across Python, NumPy, and PyTorch, and record execution environment metadata. Independent repeat-run variance is monitored to ensure reproducible metric distributions across compute environments.
+- **Ready for Autonomous Search**: The benchmarks exhibit consistent, non-trivial learning dynamics, serving as the empirical foundation for comparative search optimization.

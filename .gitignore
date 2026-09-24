@@ -52,3 +52,4 @@ secrets.json
 # Temporary files
 *.tmp
 *.log
+kaggle_temp/

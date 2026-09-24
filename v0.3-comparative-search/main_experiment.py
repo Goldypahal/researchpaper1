@@ -32,9 +32,10 @@ from scientific_stats.statistical_analysis import (
 def run_comparative_experiment(
     tasks: List[str] = ["dyck", "fsm"],
     methods: List[str] = ["random", "tpe", "evolutionary", "llm"],
-    seeds: List[int] = [42, 101],
-    max_iterations: int = 5,
-    steps_per_candidate: int = 30
+    seeds: List[int] = [42, 101, 202, 303, 404],
+    max_iterations: int = 10,
+    steps_per_candidate: int = 25,
+    eval_timeout: float = 300.0
 ):
     print("=====================================================================", flush=True)
     print("PHASE 8: MATCHED-COMPUTE COMPARATIVE SEARCH BENCHMARK", flush=True)
@@ -52,16 +53,31 @@ def run_comparative_experiment(
     all_trajectories = {t: {m: [] for m in methods} for t in tasks}
 
     for task in tasks:
-        print(f"\n################### TASK: {task.upper()} ###################")
+        print(f"\n################### TASK: {task.upper()} ###################", flush=True)
         for method in methods:
-            print(f"\n--> Running Search Arm: [{method.upper()}] on {task.upper()}")
+            print(f"\n--> Running Search Arm: [{method.upper()}] on {task.upper()}", flush=True)
             for s in seeds:
+                trace_file = os.path.join(traces_dir, f"trace_{task}_{method}_seed_{s}.json")
+                if os.path.exists(trace_file) and os.path.getsize(trace_file) > 100:
+                    try:
+                        with open(trace_file, "r") as tf:
+                            cached_res = json.load(tf)
+                        if len(cached_res.get("trajectory", [])) >= max_iterations:
+                            all_trajectories[task][method].append(cached_res)
+                            auc_val = cached_res.get("auc_normalized_gain", cached_res.get("auc_search_curve", 0.0))
+                            print(f"  [Seed {s:3d}] [RESUMED FROM DISK] Base: {cached_res['baseline_val_loss']:.4f} -> Best: {cached_res['best_val_loss']:.4f} "
+                                  f"(Gain: {cached_res['improvement_pct']:+.2f}%) | OOD: {cached_res['best_ood_loss']:.4f} | AUC Gain: {auc_val:.4f}", flush=True)
+                            continue
+                    except Exception as e:
+                        print(f"  [Seed {s:3d}] Cache read failed ({e}), re-evaluating...", flush=True)
+
                 t0 = time.time()
                 bench = ComparativeSearchBenchmark(
                     task=task,
                     seed=s,
                     max_iterations=max_iterations,
-                    steps_per_candidate=steps_per_candidate
+                    steps_per_candidate=steps_per_candidate,
+                    eval_timeout=eval_timeout
                 )
                 res = bench.run_trajectory(method=method)
                 elapsed = time.time() - t0
@@ -69,14 +85,13 @@ def run_comparative_experiment(
                 all_trajectories[task][method].append(res)
 
                 # Save individual trajectory
-                trace_file = os.path.join(traces_dir, f"trace_{task}_{method}_seed_{s}.json")
                 with open(trace_file, "w") as f:
                     json.dump(res, f, indent=2)
 
                 auc_val = res.get("auc_normalized_gain", res.get("auc_search_curve", 0.0))
                 print(f"  [Seed {s:3d}] Base: {res['baseline_val_loss']:.4f} -> Best: {res['best_val_loss']:.4f} "
                       f"(Gain: {res['improvement_pct']:+.2f}%) | OOD: {res['best_ood_loss']:.4f} | "
-                      f"AUC Gain: {auc_val:.2f} | GPU: {res['total_gpu_seconds']:.1f}s")
+                      f"AUC Gain: {auc_val:.4f} | Eval Time: {res.get('total_eval_wall_clock_sec', res.get('total_gpu_seconds', 0.0)):.1f}s", flush=True)
 
                 # Registry entry
                 exp_entry = {
@@ -197,7 +212,7 @@ def generate_comparative_report(
         md.append(f"## Benchmark: {task.upper()}")
         md.append("")
         md.append("### 1. Performance Summary Across Search Arms")
-        md.append("| Search Arm | $L^*_{\\text{val}}$ Mean [95% CI] | $L^*_{\\text{OOD}}$ Mean [95% CI] | Gain (%) Mean | AUC Efficiency Mean | GPU Time (s) |")
+        md.append("| Search Arm | $L^*_{\\text{val}}$ Mean [95% CI] | $L^*_{\\text{OOD}}$ Mean [95% CI] | Gain (%) Mean | Normalized Gain AUC | Eval Wall-Clock (s) |")
         md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
 
         arms = analysis[task]["arms"]
@@ -212,7 +227,7 @@ def generate_comparative_report(
             md.append(
                 f"| **{m.upper()}** | {vl['mean']:.4f} [{vl['ci_95'][0]:.4f}, {vl['ci_95'][1]:.4f}] | "
                 f"{ol['mean']:.4f} [{ol['ci_95'][0]:.4f}, {ol['ci_95'][1]:.4f}] | "
-                f"{gn['mean']:+.2f}% | {auc['mean']:.1f} | {gt['mean']:.1f}s |"
+                f"{gn['mean']:+.2f}% | {auc['mean']:.4f} | {gt['mean']:.1f}s |"
             )
 
         md.append("")
@@ -240,13 +255,29 @@ def generate_comparative_report(
 
     md.extend([
         "## 3. Scientific Takeaways",
-        "- **Empirical Reality of Search Efficiency**: In bounded search spaces, classical stochastic search (Random and TPE) explores broadly without cognitive overhead. The LLM Agent's performance is strictly bound by whether its semantic hypotheses correctly align with the problem's inductive biases.",
-        "- **OOD Generalization**: Structural architecture modifications (e.g. rotary embeddings, SwiGLU) discoverable by all arms have pronounced effects on the Generalization Gap on Dyck-4, showing that inductive bias is primarily encoded in the model architecture rather than the search heuristic alone.",
-        "- **Equal-Compute Rigor**: Normalizing by GPU seconds and AUC reveals whether an algorithm achieves early convergence or merely exhausts candidate iterations."
+        "- **Search Paradigm Comparison**: Compares uniform stochastic exploration (Random), surrogate model optimization (TPE), population-based genetic selection (Evolutionary), and semantic hypothesis generation (LLM).",
+        "- **Task Complexity Scaling**: Evaluates whether the inductive biases discoverable by each search paradigm differ across Chomsky regular state tracking (Hidden FSM) versus context-free hierarchical grammar (Dyck-4).",
+        "- **Matched Evaluation Budget**: All candidate configurations are strictly bounded by identical gradient update horizons in the Immutable Evaluator, isolating search algorithm efficacy from training budget disparities."
     ])
 
     return "\n".join(md)
 
 
 if __name__ == "__main__":
-    run_comparative_experiment()
+    parser = argparse.ArgumentParser(description="Phase 8: Matched-Compute Comparative Search Benchmark")
+    parser.add_argument("--tasks", nargs="+", default=["dyck", "fsm"], help="Tasks to evaluate")
+    parser.add_argument("--methods", nargs="+", default=["random", "tpe", "evolutionary", "llm"], help="Search methods")
+    parser.add_argument("--seeds", nargs="+", type=int, default=[42, 101, 202, 303, 404], help="Random seeds")
+    parser.add_argument("--max-iterations", type=int, default=10, help="Search horizon K")
+    parser.add_argument("--steps-per-candidate", type=int, default=25, help="Evaluation steps per candidate")
+    parser.add_argument("--eval-timeout", type=float, default=300.0, help="Timeout in seconds per candidate evaluation")
+    args = parser.parse_args()
+
+    run_comparative_experiment(
+        tasks=args.tasks,
+        methods=args.methods,
+        seeds=args.seeds,
+        max_iterations=args.max_iterations,
+        steps_per_candidate=args.steps_per_candidate,
+        eval_timeout=args.eval_timeout
+    )
