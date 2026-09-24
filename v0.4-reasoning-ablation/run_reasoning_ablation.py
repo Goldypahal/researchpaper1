@@ -82,14 +82,18 @@ def run_reasoning_ablation_suite(
             with open(trace_path, "w") as f:
                 json.dump(res, f, indent=2)
 
-            calib_str = f"MAE: {res['calibration_mae']:.4f}" if res['calibration_mae'] is not None else "N/A"
+            auc_val = res.get("auc_normalized_gain", res.get("auc_search_curve", 0.0))
+            calib_mae = res.get("calibration_mae")
+            if calib_mae is None and res.get("calibration_report") and isinstance(res["calibration_report"], dict):
+                calib_mae = res["calibration_report"].get("mae")
+            calib_str = f"MAE: {calib_mae:.4f}" if calib_mae is not None else "N/A"
             print(f"  [Seed {s:3d}] Best Val: {res['best_val_loss']:.4f} (Gain: {res['improvement_pct']:+.2f}%) | "
-                  f"OOD: {res['best_ood_loss']:.4f} | AUC: {res['auc_search_curve']:.1f} | Calib {calib_str} | GPU: {res['total_gpu_seconds']:.1f}s")
+                  f"OOD: {res['best_ood_loss']:.4f} | AUC Gain: {auc_val:.2f} | Calib {calib_str} | GPU: {res['total_gpu_seconds']:.1f}s")
 
             # Registry entry
             exp_entry = {
                 "experiment_id": f"EXP-PHASE11-ABLATION-{mode.upper()}-SEED-{s}",
-                "git_commit": "c7d3f3a0d90ed05d40277bac3f14ab001d2151bf",
+                "git_commit": "bebf551a3d02e4cf0c058c42a2d48c8b25cb48bb",
                 "task": task,
                 "method": f"llm_ablation_{mode}",
                 "seed": s,
@@ -102,8 +106,9 @@ def run_reasoning_ablation_suite(
                     "best_val_loss": res["best_val_loss"],
                     "best_ood_loss": res["best_ood_loss"],
                     "improvement_pct": res["improvement_pct"],
-                    "auc_search_curve": res["auc_search_curve"],
-                    "calibration_mae": res["calibration_mae"],
+                    "auc_normalized_gain": auc_val,
+                    "auc_search_curve": auc_val,
+                    "calibration_mae": calib_mae,
                     "gpu_seconds": res["total_gpu_seconds"]
                 },
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -119,13 +124,14 @@ def run_reasoning_ablation_suite(
         best_vals = [r["best_val_loss"] for r in runs]
         best_oods = [r["best_ood_loss"] for r in runs]
         gains = [r["improvement_pct"] for r in runs]
-        aucs = [r["auc_search_curve"] for r in runs]
-        calibs = [r["calibration_mae"] for r in runs if r["calibration_mae"] is not None]
+        aucs = [r.get("auc_normalized_gain", r.get("auc_search_curve", 0.0)) for r in runs]
+        calibs = [r.get("calibration_mae") for r in runs if r.get("calibration_mae") is not None]
 
         analysis["modes"][m] = {
             "best_val_loss": summarize_distribution(best_vals),
             "best_ood_loss": summarize_distribution(best_oods),
             "gain_pct": summarize_distribution(gains),
+            "auc_normalized_gain": summarize_distribution(aucs),
             "auc_search_curve": summarize_distribution(aucs),
             "calibration_mae": summarize_distribution(calibs) if calibs else None
         }
@@ -228,7 +234,7 @@ def generate_ablation_report(analysis: Dict[str, Any], modes: List[str], seeds: 
         "## 3. Key Findings on Autonomous LLM Reasoning",
         "- **Impact of Memory (History vs Zero-Shot)**: Ablating historical memory (`no_history`) forces the agent to propose disjoint hypotheses, preventing systematic hill-climbing or iterative refinement.",
         "- **Qualitative Verbal Reflection**: Maintaining verbal reflection logs (`full`) allows the agent to synthesize failure modes, avoiding repeating parameter combinations that led to gradient divergence.",
-        "- **Hypothesis Calibration**: Agents systematically over-estimate their predicted improvement ($\Delta^{\\text{pred}} > \Delta^{\\text{actual}}$), confirming the critical need for calibration metrics in autonomous science systems."
+        r"- **Hypothesis Calibration**: Agents systematically over-estimate their predicted improvement ($\Delta^{\text{pred}} > \Delta^{\text{actual}}$), confirming the critical need for calibration metrics in autonomous science systems."
     ])
 
     return "\n".join(md)

@@ -128,6 +128,15 @@ def run_kaggle_sweep(
                         arc = os.path.relpath(fp, WORKSPACE_ROOT)
                         zipf.write(fp, arcname=arc)
 
+    # Copy to /kaggle/working/ if running in Kaggle subdirectory
+    kaggle_out = "/kaggle/working"
+    if os.path.exists(kaggle_out):
+        dest_path = os.path.join(kaggle_out, archive_name)
+        if os.path.abspath(dest_path) != os.path.abspath(archive_path):
+            import shutil
+            shutil.copy2(archive_path, dest_path)
+            print(f"[Exported] Copied zip to: {dest_path}")
+
     print(f"\n[DONE] Kaggle execution finished. Download '{archive_name}' from the Kaggle Output panel.")
 
 

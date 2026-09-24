@@ -238,6 +238,10 @@ class ComparativeSearchBenchmark:
             actuals = [h["actual_delta_loss"] for h in history[1:]]
             calibration_report = evaluate_hypothesis_calibration(preds, actuals)
 
+        calib_mae = None
+        if calibration_report and isinstance(calibration_report, dict) and "mae" in calibration_report:
+            calib_mae = calibration_report["mae"]
+
         return {
             "method": method,
             "task": self.task,
@@ -249,7 +253,9 @@ class ComparativeSearchBenchmark:
             "total_gpu_seconds": round(cum_gpu_sec, 3),
             "auc_normalized_gain": auc_gain,
             "raw_loss_auc": raw_loss_auc,
+            "auc_search_curve": auc_gain,
             "calibration_report": calibration_report,
+            "calibration_mae": calib_mae,
             "trajectory": history
         }
 

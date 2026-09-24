@@ -73,14 +73,15 @@ def run_comparative_experiment(
                 with open(trace_file, "w") as f:
                     json.dump(res, f, indent=2)
 
+                auc_val = res.get("auc_normalized_gain", res.get("auc_search_curve", 0.0))
                 print(f"  [Seed {s:3d}] Base: {res['baseline_val_loss']:.4f} -> Best: {res['best_val_loss']:.4f} "
                       f"(Gain: {res['improvement_pct']:+.2f}%) | OOD: {res['best_ood_loss']:.4f} | "
-                      f"AUC: {res['auc_search_curve']:.1f} | GPU: {res['total_gpu_seconds']:.1f}s")
+                      f"AUC Gain: {auc_val:.2f} | GPU: {res['total_gpu_seconds']:.1f}s")
 
                 # Registry entry
                 exp_entry = {
                     "experiment_id": f"EXP-PHASE8-{task.upper()}-{method.upper()}-SEED-{s}",
-                    "git_commit": "c7d3f3a0d90ed05d40277bac3f14ab001d2151bf",
+                    "git_commit": "bebf551a3d02e4cf0c058c42a2d48c8b25cb48bb",
                     "task": task,
                     "method": method,
                     "seed": s,
@@ -93,7 +94,9 @@ def run_comparative_experiment(
                         "best_val_loss": res["best_val_loss"],
                         "best_ood_loss": res["best_ood_loss"],
                         "improvement_pct": res["improvement_pct"],
-                        "auc_search_curve": res["auc_search_curve"],
+                        "auc_normalized_gain": auc_val,
+                        "auc_search_curve": auc_val,
+                        "raw_loss_auc": res.get("raw_loss_auc", 0.0),
                         "gpu_seconds": res["total_gpu_seconds"]
                     },
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -112,13 +115,14 @@ def run_comparative_experiment(
             best_vals = [r["best_val_loss"] for r in runs]
             best_oods = [r["best_ood_loss"] for r in runs]
             gains = [r["improvement_pct"] for r in runs]
-            aucs = [r["auc_search_curve"] for r in runs]
+            aucs = [r.get("auc_normalized_gain", r.get("auc_search_curve", 0.0)) for r in runs]
             gpu_times = [r["total_gpu_seconds"] for r in runs]
 
             task_analysis["arms"][method] = {
                 "best_val_loss": summarize_distribution(best_vals),
                 "best_ood_loss": summarize_distribution(best_oods),
                 "gain_pct": summarize_distribution(gains),
+                "auc_normalized_gain": summarize_distribution(aucs),
                 "auc_search_curve": summarize_distribution(aucs),
                 "gpu_seconds": summarize_distribution(gpu_times)
             }
