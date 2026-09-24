@@ -16,11 +16,14 @@ Rather than making unsupported macro-claims about fully autonomous scientific di
 
 ```
 ├── agent_scaffold/              # Autonomous agent loop, sandbox runner, & baseline implementations
-│   ├── agent_loop.py            # Main agent interaction loop with task dispatcher
+│   ├── agent_loop.py            # Main agent interaction loop with task & reasoning ablation dispatcher
 │   ├── eval_harness.py          # Deterministic evaluation harness (Dyck-k, Hidden FSM, Parity)
-│   ├── llm_agent.py             # Agent LLM prompting and step reasoning
+│   ├── llm_agent.py             # Agent LLM reasoning engine (Proposer + Critic + Ablation modes)
 │   ├── model_baseline.py        # Baseline SmallTransformerLM architecture
-│   ├── random_search_baseline.py# Stochastic search comparison baseline
+│   ├── random_search_baseline.py# Baseline B: Uniform stochastic search
+│   ├── bayesian_opt_baseline.py # Baseline C: Bayesian Optimization via Optuna TPE
+│   ├── evolutionary_baseline.py # Baseline D: Genetic Algorithm (Tournament, Crossover, Mutation)
+│   ├── run_comparative_benchmark.py # Multi-baseline comparative benchmark orchestrator
 │   ├── sandbox_runner.py        # Isolated execution sandbox
 │   └── trace_logger.py          # Dynamic baseline tracking & JSON trace graph generation
 ├── execution_traces/            # Current empirical execution traces
@@ -69,14 +72,36 @@ Rather than making unsupported macro-claims about fully autonomous scientific di
 python agent_scaffold/eval_harness.py --task dyck --dry-run
 ```
 
-### Run Random Search Baseline on Dyck-$k$
+### Run Search Baselines
 ```bash
-python agent_scaffold/random_search_baseline.py --task dyck --iterations 3 --seed 42
+# Baseline B: Random Search
+python agent_scaffold/random_search_baseline.py --task dyck --iterations 10 --seed 42
+
+# Baseline C: Bayesian Optimization (Optuna TPE)
+python agent_scaffold/bayesian_opt_baseline.py --task dyck --iterations 10 --seed 42
+
+# Baseline D: Evolutionary Search (Genetic Algorithm)
+python agent_scaffold/evolutionary_baseline.py --task dyck --iterations 10 --seed 42
 ```
 
-### Run Autonomous LLM Agent Loop
+### Run Unified Comparative Search Benchmark
 ```bash
-python agent_scaffold/agent_loop.py --task dyck --iterations 3 --provider anthropic --model claude-3-5-sonnet-20241022
+python agent_scaffold/run_comparative_benchmark.py --task dyck --iterations 10 --seeds 42 101 777 --methods random tpe evolutionary
+```
+
+### Run Autonomous LLM Agent & Reasoning Ablations
+```bash
+# Full reasoning with execution history & reflection
+python agent_scaffold/agent_loop.py --task dyck --iterations 10 --provider anthropic --model claude-3-5-sonnet-20241022 --reasoning-mode full
+
+# Ablation 1: Zero-shot proposal (no history)
+python agent_scaffold/agent_loop.py --task dyck --iterations 10 --reasoning-mode no_history
+
+# Ablation 2: Number-only history without verbal reflection
+python agent_scaffold/agent_loop.py --task dyck --iterations 10 --reasoning-mode history_no_reflection
+
+# Ablation 3: Proposer-Critic refinement loop
+python agent_scaffold/agent_loop.py --task dyck --iterations 10 --reasoning-mode critic_refine
 ```
 
 ---

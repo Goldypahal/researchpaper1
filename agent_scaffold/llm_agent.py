@@ -80,7 +80,7 @@ class SimulationDisallowedError(RuntimeError):
 
 class LLMResearchAgent:
     def __init__(self, provider=None, model=None, api_key=None, strict=True,
-                 allow_simulation=False):
+                 allow_simulation=False, reasoning_mode="full"):
         """
         strict: if True (default), refuses to silently use the simulation
             fallback when no API key/provider is found. This is what you want
@@ -88,7 +88,10 @@ class LLMResearchAgent:
         allow_simulation: must be explicitly set True (together with
             strict=False, or on its own) to permit the simulation path.
             Two separate knobs so a single typo can't accidentally unlock it.
+        reasoning_mode: one of 'full', 'no_history', 'history_no_reflection', 'critic_refine'.
+            Used for ablation studies evaluating the marginal value of history, reflection, and critics.
         """
+        self.reasoning_mode = reasoning_mode
         self.anthropic_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         self.openai_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.nvidia_key = api_key if (api_key and str(api_key).startswith("nvapi-")) else os.environ.get("NVIDIA_API_KEY")
@@ -166,12 +169,32 @@ class LLMResearchAgent:
                 h_entry["error_traceback"] = item.get("traceback")[:300]
             history_summary.append(h_entry)
 
+        # Handle reasoning ablation modes
+        if self.reasoning_mode == "no_history":
+            history_text = "No historical context provided (Ablation: Zero-Shot Proposal Mode). Propose based on base architecture specifications only."
+        elif self.reasoning_mode == "history_no_reflection":
+            # Strip verbal hypotheses and error explanations, keeping only numbers
+            numeric_history = [
+                {
+                    "iteration": h.get("iteration"),
+                    "hyperparameters": h.get("hyperparameters_tested"),
+                    "status": h.get("status"),
+                    "val_loss": h.get("val_loss"),
+                    "relative_gain_pct": h.get("relative_gain_pct")
+                }
+                for h in history_summary
+            ]
+            history_text = json.dumps(numeric_history, indent=2)
+        else:
+            history_text = json.dumps(history_summary, indent=2)
+
         user_prompt = f"""Current Iteration: {iteration_idx}
 Baseline Loss (Iteration 0): {base_loss:.4f}
 Current Incumbent Best Validation Loss: {incumbent_best_loss:.4f}
+Reasoning Mode: {self.reasoning_mode}
 
 Execution History so far:
-{json.dumps(history_summary, indent=2)}
+{history_text}
 
 Formulate Iteration {iteration_idx}'s hypothesis and concrete parameter modifications. Output ONLY valid JSON.
 """
@@ -185,9 +208,38 @@ Formulate Iteration {iteration_idx}'s hypothesis and concrete parameter modifica
         else:
             result = self._call_adaptive_simulation(iteration_idx, history, incumbent_best_loss, base_loss)
 
-        # Self-audit tag: every record, real or simulated, carries its true source.
+        # Optional Critic Refinement Pass (Aletheia / Gemini Deep Think style proposer-critic loop)
+        if self.reasoning_mode == "critic_refine" and self.provider != "adaptive_simulation":
+            critic_prompt = f"""You are a senior adversarial machine learning verification critic.
+Review the following proposed optimization candidate:
+{json.dumps(result, indent=2)}
+
+Historical execution context:
+{history_text}
+
+Task: Check whether this modification repeats a known failed configuration, violates head-dimension divisibility, or risks divergence.
+Refine the hypothesis, predicted_delta_loss, and hyperparameters to maximize stability and search efficiency.
+Output ONLY the final verified/refined JSON matching the original schema.
+"""
+            try:
+                if self.provider == "anthropic":
+                    refined = self._call_anthropic(critic_prompt)
+                elif self.provider in ["nvidia", "nemotron"]:
+                    refined = self._call_nvidia(critic_prompt)
+                elif self.provider == "openai":
+                    refined = self._call_openai(critic_prompt)
+                else:
+                    refined = result
+                if isinstance(refined, dict) and "modifications" in refined:
+                    result = refined
+                    result["critic_refined"] = True
+            except Exception as e:
+                print(f"[LLM Agent] Critic refinement pass skipped due to error: {e}")
+
+        # Self-audit tag: every record, real or simulated, carries its true source and reasoning mode.
         result["provider"] = self.provider
         result["model"] = self.model if self.provider != "adaptive_simulation" else "adaptive_simulation"
+        result["reasoning_mode"] = self.reasoning_mode
         return result
 
     def _call_nvidia(self, user_prompt, max_retries=5):

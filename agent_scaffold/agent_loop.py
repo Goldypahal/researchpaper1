@@ -23,11 +23,12 @@ from llm_agent import LLMResearchAgent, SimulationDisallowedError
 def run_agent_loop(experiment_id="exp_001_transformer_opt", arm="Arm1_AutonomousAgent",
                    dry_run=False, max_iterations=5, budget_hours=10.0,
                    llm_provider=None, llm_model=None, api_key=None, allow_simulation=False,
-                   task="dyck"):
+                   task="dyck", reasoning_mode="full"):
     print(f"=== INITIALIZING AUTONOMOUS RESEARCH AGENT SCAFFOLD ===")
     print(f"Experiment ID: {experiment_id}")
     print(f"Arm: {arm}")
     print(f"Task Family: {task}")
+    print(f"Reasoning Mode: {reasoning_mode}")
     print(f"Max Iterations: {max_iterations}")
     print(f"GPU Budget: {budget_hours} Hours")
     print(f"Dry Run Mode: {dry_run}")
@@ -41,6 +42,7 @@ def run_agent_loop(experiment_id="exp_001_transformer_opt", arm="Arm1_Autonomous
             model=llm_model,
             api_key=api_key,
             allow_simulation=allow_simulation,
+            reasoning_mode=reasoning_mode,
         )
     except SimulationDisallowedError as e:
         print(f"\n[FATAL] {e}\n")
@@ -278,6 +280,9 @@ if __name__ == "__main__":
                               "is available. Only use this for plumbing/CI smoke tests. Output from these runs "
                               "must never be reported as real agent results.")
     parser.add_argument("--task", type=str, default="dyck", choices=["dyck", "fsm", "parity_legacy"])
+    parser.add_argument("--reasoning-mode", type=str, default="full",
+                        choices=["full", "no_history", "history_no_reflection", "critic_refine"],
+                        help="Reasoning ablation condition (full, no_history, history_no_reflection, critic_refine)")
     args = parser.parse_args()
 
     run_agent_loop(
@@ -289,4 +294,5 @@ if __name__ == "__main__":
         api_key=args.api_key,
         allow_simulation=args.allow_simulation,
         task=args.task,
+        reasoning_mode=args.reasoning_mode,
     )
