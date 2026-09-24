@@ -1,0 +1,21 @@
+# Standardized Seeds for ResearchPaper1 Scientific Program
+# Multi-seed replications guarantee statistical validity (N >= 5 to 50)
+
+# Benchmark Validation Seeds (Phase 2):
+42
+101
+202
+303
+404
+
+# Main Comparative Experiment Extended Seeds (Phase 8):
+42
+101
+202
+303
+404
+505
+606
+707
+808
+909
