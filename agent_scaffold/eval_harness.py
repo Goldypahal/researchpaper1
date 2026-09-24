@@ -222,8 +222,9 @@ def evaluate(model, val_data, val_masks=None, batch_size=32, device='cpu'):
 # Training Loop
 # ---------------------------------------------------------------------------
 def run_training(task="dyck", dry_run=False, max_steps=200, lr=1e-3, weight_decay=0.01,
-                 n_layers=6, n_heads=4, d_model=256, d_ff=1024,
+                 n_layers=6, n_heads=4, n_kv_heads=None, d_model=256, d_ff=1024,
                  activation="gelu", norm_type="layernorm", scale_factor=None,
+                 pos_encoding="learned", ffn_type="standard", topology="pre_ln",
                  seed=42, device='cpu'):
     start_time = time.time()
     torch.manual_seed(seed)
@@ -247,11 +248,15 @@ def run_training(task="dyck", dry_run=False, max_steps=200, lr=1e-3, weight_deca
         d_model=dim,
         n_layers=layers,
         n_heads=n_heads,
+        n_kv_heads=n_kv_heads,
         d_ff=ff_dim,
         max_seq_len=seq_len,
         activation=activation,
         norm_type=norm_type,
-        scale_factor=scale_factor
+        scale_factor=scale_factor,
+        pos_encoding=pos_encoding,
+        ffn_type=ffn_type,
+        topology=topology
     ).to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -321,9 +326,14 @@ def run_training(task="dyck", dry_run=False, max_steps=200, lr=1e-3, weight_deca
             "weight_decay": weight_decay,
             "n_layers": layers,
             "n_heads": n_heads,
+            "n_kv_heads": n_kv_heads,
             "d_model": dim,
             "activation": activation,
-            "norm_type": norm_type
+            "norm_type": norm_type,
+            "scale_factor": scale_factor,
+            "pos_encoding": pos_encoding,
+            "ffn_type": ffn_type,
+            "topology": topology
         }
     }
 
@@ -343,10 +353,18 @@ if __name__ == "__main__":
     parser.add_argument("--weight-decay", type=float, default=0.01, help="Weight decay")
     parser.add_argument("--n-layers", type=int, default=6, help="Number of Transformer layers")
     parser.add_argument("--n-heads", type=int, default=4, help="Attention heads")
+    parser.add_argument("--n-kv-heads", type=int, default=None, help="KV heads for GQA (defaults to n_heads for MHA)")
     parser.add_argument("--d-model", type=int, default=256, help="Model dimension")
     parser.add_argument("--activation", type=str, default="gelu", help="Activation (gelu, relu, silu)")
     parser.add_argument("--norm-type", type=str, default="layernorm", help="Norm type (layernorm, rmsnorm)")
     parser.add_argument("--scale-factor", type=float, default=None, help="Custom attention scaling")
+    parser.add_argument("--pos-encoding", type=str, default="learned",
+                        choices=["learned", "sinusoidal", "rotary", "none"],
+                        help="Positional encoding scheme")
+    parser.add_argument("--ffn-type", type=str, default="standard",
+                        choices=["standard", "swiglu"], help="Feed-forward network architecture")
+    parser.add_argument("--topology", type=str, default="pre_ln",
+                        choices=["pre_ln", "post_ln", "parallel"], help="Residual block topology")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     args = parser.parse_args()
 
@@ -358,9 +376,13 @@ if __name__ == "__main__":
         weight_decay=args.weight_decay,
         n_layers=args.n_layers,
         n_heads=args.n_heads,
+        n_kv_heads=args.n_kv_heads,
         d_model=args.d_model,
         activation=args.activation,
         norm_type=args.norm_type,
         scale_factor=args.scale_factor,
+        pos_encoding=args.pos_encoding,
+        ffn_type=args.ffn_type,
+        topology=args.topology,
         seed=args.seed
     )

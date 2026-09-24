@@ -29,42 +29,50 @@ import json
 import re
 import time
 
-SYSTEM_PROMPT = """You are an expert autonomous machine learning researcher specializing in neural architecture search and Transformer optimization.
-Your objective is to minimize the holdout validation cross-entropy loss of a small Transformer language model on an unseen synthetic algebraic state-transition sequence modeling dataset.
+SYSTEM_PROMPT = """You are an expert autonomous machine learning researcher specializing in neural architecture search, structural Transformer design, and sequence modeling optimization.
+Your objective is to minimize the holdout validation cross-entropy loss and out-of-distribution generalization loss of a Small Transformer language model on an unseen synthetic Dyck-k or state-transition sequence modeling dataset.
 
-You have access to the following mutable design space:
+You have access to a hierarchical design space covering both continuous optimization and discrete architectural topology:
 1. Learning rate (lr): float in range [1e-5, 5e-2]
 2. Weight decay (weight_decay): float in range [0.0, 0.2]
 3. Number of layers (n_layers): int in {2, 4, 6, 8}
 4. Number of attention heads (n_heads): int in {2, 4, 8}
-5. Model dimension (d_model): int in {128, 256, 512} (must be divisible by n_heads)
-6. Activation function (activation): "gelu", "relu", or "silu"
-7. Normalization layer (norm_type): "layernorm" or "rmsnorm"
-8. Attention scale factor (scale_factor): float or null (default is 1/sqrt(d_k))
+5. Key/Value heads for Grouped-Query Attention (n_kv_heads): int in {1, 2, n_heads} (must divide n_heads)
+6. Model dimension (d_model): int in {128, 256, 384} (must be divisible by n_heads)
+7. Activation function (activation): "gelu", "relu", or "silu"
+8. Normalization layer (norm_type): "layernorm" or "rmsnorm"
+9. Positional encoding (pos_encoding): "learned", "sinusoidal", "rotary" (RoPE), or "none" (NoPE)
+10. Feed-Forward architecture (ffn_type): "standard" (Linear-Act-Linear) or "swiglu" (Gated Linear Unit)
+11. Residual Block Topology (topology): "pre_ln" (sequential Pre-LN), "post_ln" (sequential Post-LN), or "parallel" (PaLM/GPT-J parallel block)
+12. Attention scale factor (scale_factor): float or null (default is 1/sqrt(d_k))
 
 You will receive the full history of previous trials, including:
 - Hypotheses tested
-- Hyperparameters used
-- Validation and training losses achieved
+- Hyperparameters and architectural structures used
+- Validation loss and out-of-distribution (OOD) accuracy achieved
 - Execution errors or tracebacks if any occurred
 - The current incumbent best loss
 
-You must analyze the historical progression, diagnose whether previous attempts underfit, overfit, diverged, or plateaued, and propose the NEXT logical hypothesis and exact modifications.
+You must analyze the historical progression, diagnose whether previous attempts underfit, overfit, diverged, or hit capacity bottlenecks, and propose the NEXT logical architectural hypothesis and exact modifications.
 You must also provide your OWN quantitative prediction for the expected loss reduction (predicted_delta_loss).
 
 You must respond with ONLY a valid JSON object matching this schema:
 {
-  "hypothesis_text": "<Clear technical hypothesis explaining why this modification will improve state-transition modeling>",
-  "target_component": "<attention | optimizer | normalization | activation | depth_width>",
+  "hypothesis_text": "<Clear technical hypothesis explaining why this structural modification improves hierarchical sequence modeling>",
+  "target_component": "<attention | ffn | topology | positional_encoding | normalization | optimizer>",
   "predicted_delta_loss": <float, your expected reduction in validation loss, e.g. 0.04>,
   "modifications": {
     "lr": <float>,
     "weight_decay": <float>,
     "n_layers": <int>,
     "n_heads": <int>,
+    "n_kv_heads": <int or null>,
     "d_model": <int>,
     "activation": "<gelu | relu | silu>",
     "norm_type": "<layernorm | rmsnorm>",
+    "pos_encoding": "<learned | sinusoidal | rotary | none>",
+    "ffn_type": "<standard | swiglu>",
+    "topology": "<pre_ln | post_ln | parallel>",
     "scale_factor": <float or null>
   },
   "reasoning": "<Detailed scientific rationale>"

@@ -164,6 +164,14 @@ def run_agent_loop(experiment_id="exp_001_transformer_opt", arm="Arm1_Autonomous
             run_args.extend(["--norm-type", str(mods["norm_type"])])
         if mods.get("scale_factor"):
             run_args.extend(["--scale-factor", str(mods["scale_factor"])])
+        if "pos_encoding" in mods and mods["pos_encoding"]:
+            run_args.extend(["--pos-encoding", str(mods["pos_encoding"])])
+        if "ffn_type" in mods and mods["ffn_type"]:
+            run_args.extend(["--ffn-type", str(mods["ffn_type"])])
+        if "topology" in mods and mods["topology"]:
+            run_args.extend(["--topology", str(mods["topology"])])
+        if "n_kv_heads" in mods and mods["n_kv_heads"]:
+            run_args.extend(["--n-kv-heads", str(mods["n_kv_heads"])])
 
         # 4. Execute candidate in sandbox
         res = execute_in_sandbox(harness_path, run_args, timeout_sec=60 if dry_run else 300)

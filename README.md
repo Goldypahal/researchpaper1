@@ -64,6 +64,20 @@ Rather than making unsupported macro-claims about fully autonomous scientific di
 
 ---
 
+## 🏗️ Hierarchical Design Space (Level 1 & Level 2 Structural NAS)
+
+Rather than limiting search to continuous hyperparameter tuning, the search space spans discrete module topologies:
+
+| Dimension | Component Variants | Theoretical Motivation |
+| :--- | :--- | :--- |
+| **Attention Mechanism** | Multi-Head Attention (`mha`), Grouped-Query Attention (`gqa` with $n_{\text{kv\_heads}} \in \{1, 2, n_{\text{heads}}\}$) | Memory footprint vs. head diversity in tracking non-local bracket dependencies |
+| **Positional Encoding** | Learned 1D (`learned`), Sinusoidal (`sinusoidal`), Rotary (`rotary` / RoPE), NoPE (`none`) | Translation invariance & length extrapolation on deep OOD nesting depths |
+| **FFN Sub-networks** | Standard FFN (`standard`: Linear-Act-Linear), SwiGLU (`swiglu`: Gated Linear Unit) | Multiplicative gating capacity for state-transition feature representation |
+| **Residual Block Topology** | Sequential Pre-LN (`pre_ln`), Sequential Post-LN (`post_ln`), Parallel Block (`parallel` PaLM/GPT-J style) | Gradient flow stability vs. parallelized attention/FFN computation |
+| **Continuous Hyperparameters** | `lr` $[10^{-5}, 5 \cdot 10^{-2}]$, `weight_decay` $[0.0, 0.2]$, `n_layers` $\{2,4,6,8\}$, `d_model` $\{128,256,384\}$ | Resource scaling & capacity balancing |
+
+---
+
 ## 🚀 Quickstart
 
 ### Run Dyck-$k$ Evaluation

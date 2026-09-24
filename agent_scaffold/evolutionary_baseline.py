@@ -26,19 +26,36 @@ GENE_SPACE = {
     "d_model": [128, 256, 384],
     "activation": ["gelu", "relu", "silu"],
     "norm_type": ["layernorm", "rmsnorm"],
-    "scale_factor": [None, 0.25, 0.5, 1.0, 2.0]
+    "scale_factor": [None, 0.25, 0.5, 1.0, 2.0],
+    "pos_encoding": ["learned", "sinusoidal", "rotary", "none"],
+    "ffn_type": ["standard", "swiglu"],
+    "topology": ["pre_ln", "post_ln", "parallel"],
+    "n_kv_heads": ["same", 1, 2]
 }
 
 def sample_random_individual():
+    heads = random.choice(GENE_SPACE["n_heads"])
+    kv_choice = random.choice(GENE_SPACE["n_kv_heads"])
+    if kv_choice == "same":
+        kv_heads = heads
+    elif heads % kv_choice == 0:
+        kv_heads = kv_choice
+    else:
+        kv_heads = heads
+
     return {
         "lr": random.choice(GENE_SPACE["lr"]),
         "weight_decay": random.choice(GENE_SPACE["weight_decay"]),
         "n_layers": random.choice(GENE_SPACE["n_layers"]),
-        "n_heads": random.choice(GENE_SPACE["n_heads"]),
+        "n_heads": heads,
+        "n_kv_heads": kv_heads,
         "d_model": random.choice(GENE_SPACE["d_model"]),
         "activation": random.choice(GENE_SPACE["activation"]),
         "norm_type": random.choice(GENE_SPACE["norm_type"]),
-        "scale_factor": random.choice(GENE_SPACE["scale_factor"])
+        "scale_factor": random.choice(GENE_SPACE["scale_factor"]),
+        "pos_encoding": random.choice(GENE_SPACE["pos_encoding"]),
+        "ffn_type": random.choice(GENE_SPACE["ffn_type"]),
+        "topology": random.choice(GENE_SPACE["topology"])
     }
 
 def crossover(parent1, parent2):
@@ -166,6 +183,14 @@ def run_evolutionary_search(experiment_id="exp_arm4_evolutionary_baseline",
         run_args.extend(["--norm-type", str(candidate["norm_type"])])
         if candidate.get("scale_factor"):
             run_args.extend(["--scale-factor", str(candidate["scale_factor"])])
+        if candidate.get("pos_encoding"):
+            run_args.extend(["--pos-encoding", str(candidate["pos_encoding"])])
+        if candidate.get("ffn_type"):
+            run_args.extend(["--ffn-type", str(candidate["ffn_type"])])
+        if candidate.get("topology"):
+            run_args.extend(["--topology", str(candidate["topology"])])
+        if candidate.get("n_kv_heads"):
+            run_args.extend(["--n-kv-heads", str(candidate["n_kv_heads"])])
 
         res = execute_in_sandbox(harness_path, run_args, timeout_sec=60 if dry_run else 300)
         total_gpu_sec += res["elapsed_seconds"]

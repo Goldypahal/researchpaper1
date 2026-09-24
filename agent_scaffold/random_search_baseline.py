@@ -39,7 +39,11 @@ PARAM_SPACE = {
     "d_model_choices": [128, 256, 512],
     "activation_choices": ["gelu", "relu", "silu"],
     "norm_type_choices": ["layernorm", "rmsnorm"],
-    "scale_factor_choices": [None, 0.05, 0.1, 0.15, 0.25]
+    "scale_factor_choices": [None, 0.05, 0.1, 0.15, 0.25],
+    "pos_encoding_choices": ["learned", "sinusoidal", "rotary", "none"],
+    "ffn_type_choices": ["standard", "swiglu"],
+    "topology_choices": ["pre_ln", "post_ln", "parallel"],
+    "n_kv_heads_choices": [1, 2, "same"]
 }
 
 
@@ -65,16 +69,31 @@ def sample_random_hyperparameters(seed=None):
     sampled_activation = random.choice(PARAM_SPACE["activation_choices"])
     sampled_norm = random.choice(PARAM_SPACE["norm_type_choices"])
     sampled_scale = random.choice(PARAM_SPACE["scale_factor_choices"])
+    sampled_pos = random.choice(PARAM_SPACE["pos_encoding_choices"])
+    sampled_ffn = random.choice(PARAM_SPACE["ffn_type_choices"])
+    sampled_top = random.choice(PARAM_SPACE["topology_choices"])
+
+    kv_choice = random.choice(PARAM_SPACE["n_kv_heads_choices"])
+    if kv_choice == "same":
+        sampled_kv = sampled_heads
+    elif sampled_heads % kv_choice == 0:
+        sampled_kv = kv_choice
+    else:
+        sampled_kv = sampled_heads
 
     return {
         "lr": sampled_lr,
         "weight_decay": sampled_wd,
         "n_layers": sampled_layers,
         "n_heads": sampled_heads,
+        "n_kv_heads": sampled_kv,
         "d_model": sampled_d_model,
         "activation": sampled_activation,
         "norm_type": sampled_norm,
-        "scale_factor": sampled_scale
+        "scale_factor": sampled_scale,
+        "pos_encoding": sampled_pos,
+        "ffn_type": sampled_ffn,
+        "topology": sampled_top
     }
 
 
@@ -165,6 +184,14 @@ def run_random_search(experiment_id="exp_002_random_baseline", arm="Arm2_RandomS
         run_args.extend(["--norm-type", str(sampled_params["norm_type"])])
         if sampled_params.get("scale_factor"):
             run_args.extend(["--scale-factor", str(sampled_params["scale_factor"])])
+        if sampled_params.get("pos_encoding"):
+            run_args.extend(["--pos-encoding", str(sampled_params["pos_encoding"])])
+        if sampled_params.get("ffn_type"):
+            run_args.extend(["--ffn-type", str(sampled_params["ffn_type"])])
+        if sampled_params.get("topology"):
+            run_args.extend(["--topology", str(sampled_params["topology"])])
+        if sampled_params.get("n_kv_heads"):
+            run_args.extend(["--n-kv-heads", str(sampled_params["n_kv_heads"])])
 
         # Execute candidate in sandbox
         res = execute_in_sandbox(harness_path, run_args, timeout_sec=60 if dry_run else 300)

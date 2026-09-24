@@ -91,6 +91,16 @@ def run_bayesian_optimization(experiment_id="exp_arm3_tpe_baseline",
         d_model = trial.suggest_categorical("d_model", [128, 256, 384])
         activation = trial.suggest_categorical("activation", ["gelu", "relu", "silu"])
         norm_type = trial.suggest_categorical("norm_type", ["layernorm", "rmsnorm"])
+        pos_encoding = trial.suggest_categorical("pos_encoding", ["learned", "sinusoidal", "rotary", "none"])
+        ffn_type = trial.suggest_categorical("ffn_type", ["standard", "swiglu"])
+        topology = trial.suggest_categorical("topology", ["pre_ln", "post_ln", "parallel"])
+        kv_choice = trial.suggest_categorical("n_kv_heads", ["same", "1", "2"])
+        if kv_choice == "same":
+            n_kv_heads = n_heads
+        else:
+            kv_val = int(kv_choice)
+            n_kv_heads = kv_val if (n_heads % kv_val == 0) else n_heads
+
         scale_str = trial.suggest_categorical("scale_factor", ["none", "0.25", "0.5", "1.0", "2.0"])
         scale_factor = None if scale_str == "none" else float(scale_str)
 
@@ -99,19 +109,22 @@ def run_bayesian_optimization(experiment_id="exp_arm3_tpe_baseline",
             "weight_decay": round(weight_decay, 4),
             "n_layers": n_layers,
             "n_heads": n_heads,
+            "n_kv_heads": n_kv_heads,
             "d_model": d_model,
             "activation": activation,
             "norm_type": norm_type,
-            "scale_factor": scale_factor
+            "scale_factor": scale_factor,
+            "pos_encoding": pos_encoding,
+            "ffn_type": ffn_type,
+            "topology": topology
         }
         print(f"[Arm 3 TPE Sampler] Suggested Parameters: {sampled_params}")
 
         hypo_text = (
-            f"[TPE_BAYESIAN] Probabilistic kernel density proposal: "
-            f"lr={sampled_params['lr']}, wd={sampled_params['weight_decay']}, "
-            f"layers={sampled_params['n_layers']}, heads={sampled_params['n_heads']}, "
-            f"d_model={sampled_params['d_model']}, act={sampled_params['activation']}, "
-            f"norm={sampled_params['norm_type']}."
+            f"[TPE_BAYESIAN] Probabilistic proposal: "
+            f"layers={sampled_params['n_layers']}, heads={sampled_params['n_heads']}(kv={sampled_params['n_kv_heads']}), "
+            f"d_model={sampled_params['d_model']}, pos={sampled_params['pos_encoding']}, "
+            f"ffn={sampled_params['ffn_type']}, top={sampled_params['topology']}."
         )
         hypo_id = logger.add_hypothesis(
             iteration_idx=it,
@@ -134,6 +147,14 @@ def run_bayesian_optimization(experiment_id="exp_arm3_tpe_baseline",
         run_args.extend(["--norm-type", str(sampled_params["norm_type"])])
         if sampled_params.get("scale_factor"):
             run_args.extend(["--scale-factor", str(sampled_params["scale_factor"])])
+        if sampled_params.get("pos_encoding"):
+            run_args.extend(["--pos-encoding", str(sampled_params["pos_encoding"])])
+        if sampled_params.get("ffn_type"):
+            run_args.extend(["--ffn-type", str(sampled_params["ffn_type"])])
+        if sampled_params.get("topology"):
+            run_args.extend(["--topology", str(sampled_params["topology"])])
+        if sampled_params.get("n_kv_heads"):
+            run_args.extend(["--n-kv-heads", str(sampled_params["n_kv_heads"])])
 
         res = execute_in_sandbox(harness_path, run_args, timeout_sec=60 if dry_run else 300)
         total_gpu_sec += res["elapsed_seconds"]
