@@ -32,17 +32,17 @@ from scientific_stats.statistical_analysis import (
 def run_comparative_experiment(
     tasks: List[str] = ["dyck", "fsm"],
     methods: List[str] = ["random", "tpe", "evolutionary", "llm"],
-    seeds: List[int] = [42, 101, 202],
-    max_iterations: int = 10,
-    steps_per_candidate: int = 60
+    seeds: List[int] = [42, 101],
+    max_iterations: int = 5,
+    steps_per_candidate: int = 30
 ):
-    print("=====================================================================")
-    print("PHASE 8: MATCHED-COMPUTE COMPARATIVE SEARCH BENCHMARK")
-    print(f"Tasks: {tasks}")
-    print(f"Methods: {methods}")
-    print(f"Seeds: {seeds} (N={len(seeds)} replications per arm)")
-    print(f"Horizon: K={max_iterations} iterations, {steps_per_candidate} steps per candidate")
-    print("=====================================================================\n")
+    print("=====================================================================", flush=True)
+    print("PHASE 8: MATCHED-COMPUTE COMPARATIVE SEARCH BENCHMARK", flush=True)
+    print(f"Tasks: {tasks}", flush=True)
+    print(f"Methods: {methods}", flush=True)
+    print(f"Seeds: {seeds} (N={len(seeds)} replications per arm)", flush=True)
+    print(f"Horizon: K={max_iterations} iterations, {steps_per_candidate} steps per candidate", flush=True)
+    print("=====================================================================\n", flush=True)
 
     out_dir = os.path.dirname(__file__)
     traces_dir = os.path.join(out_dir, "traces")

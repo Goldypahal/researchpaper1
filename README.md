@@ -1,128 +1,122 @@
-# The Search Efficiency Gap: Measuring When LLM Reasoning Improves (or Hinders) Autonomous Model Optimization
-## Controlled Empirical Search Benchmarks, Hierarchical Task Families, and Agent Execution Traces
+# The Search Efficiency Gap: Measuring When Semantic LLM Reasoning Actually Improves (or Hinders) Autonomous Model Optimization
+
+## Controlled Empirical Benchmarks, Matched-Compute Protocols, and Autonomous Research Trajectories
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Status](https://img.shields.io/badge/status-Research%20Paper%201-success.svg)]()
+[![Status](https://img.shields.io/badge/status-Empirical%20Research%20Program-blue.svg)]()
 
-This repository contains the codebase, empirical evaluation harness, execution trace graphs, publication figures, and literature synthesis for **Research Paper 1**.
+This repository contains the experimental infrastructure, mathematically formalized benchmarks, immutable evaluator, and statistical analysis pipeline for **Research Paper 1**.
 
-Rather than making unsupported macro-claims about fully autonomous scientific discovery, this work focuses on a concrete, rigorously measurable question:
-> **When autonomous LLM-driven optimization is constrained to a fixed experimental budget, does semantic reasoning actually provide useful search efficiency over non-semantic search, and under what conditions does it fail?**
-
----
-
-## 📌 Repository Overview
-
-```
-├── agent_scaffold/              # Autonomous agent loop, sandbox runner, & baseline implementations
-│   ├── agent_loop.py            # Main agent interaction loop with task & reasoning ablation dispatcher
-│   ├── eval_harness.py          # Deterministic evaluation harness (Dyck-k, Hidden FSM, Parity)
-│   ├── llm_agent.py             # Agent LLM reasoning engine (Proposer + Critic + Ablation modes)
-│   ├── model_baseline.py        # Baseline SmallTransformerLM architecture
-│   ├── random_search_baseline.py# Baseline B: Uniform stochastic search
-│   ├── bayesian_opt_baseline.py # Baseline C: Bayesian Optimization via Optuna TPE
-│   ├── evolutionary_baseline.py # Baseline D: Genetic Algorithm (Tournament, Crossover, Mutation)
-│   ├── run_comparative_benchmark.py # Multi-baseline comparative benchmark orchestrator
-│   ├── sandbox_runner.py        # Isolated execution sandbox
-│   └── trace_logger.py          # Dynamic baseline tracking & JSON trace graph generation
-├── execution_traces/            # Current empirical execution traces
-│   ├── trace_exp_arm1_*.json    # Iterative LLM self-improvement trials
-│   └── trace_exp_arm2_*.json    # Random search baseline comparison runs
-├── experiment_results/          # Statistical distribution reports and scaleup checkpoints
-├── figures/                     # High-resolution publication figures & evaluation plots
-├── v0.1-current-results/        # [FROZEN ARCHIVE] Immutable snapshot of initial N=10 v0.1 exploration
-│   ├── ARCHIVE_MANIFEST.md      # Detailed audit findings, corrected baseline gains, & audit notes
-│   ├── execution_traces/        # Original 20 JSON traces
-│   ├── experiment_results/      # Original statistical reports
-│   └── figures/                 # Original 5 evaluation plots
-├── Complete_Literature_Analysis_Topic_1.docx # Systematic literature review
-├── citation_audit.csv / .xlsx   # 44 curated literature citations with category & audit tags
-├── differentiation_and_protocol.md # Methodological differentiation & validation protocol
-├── human_baseline_protocol.md   # Human reference benchmark protocol (3-5 ML practitioners)
-├── outline_and_synthesis.md     # Literature synthesis, formal taxonomy, & roadmap
-├── section_4_empirical_results.md # Empirical validation & statistical analysis writeup
-└── trace_schema.json            # Graph schema for agent execution traces (Nodes & Edges)
-```
+Rather than asserting unverified claims about fully autonomous discovery, this empirical research program directly investigates:
+> **Under what conditions does semantic LLM reasoning actually provide value over established search algorithms (Random Search, TPE Bayesian Optimization, Genetic Algorithms) for autonomous machine learning optimization under equal compute budgets, and why?**
 
 ---
 
-## 🔬 Benchmark Task Families in `eval_harness.py`
+## 📌 Repository Architecture
+
+```
+RESEARCHPAPER1
+│
+├── benchmarks/                  # Formal language benchmarks & Chomsky hierarchy levels
+│   ├── dyck.py                  # True Dyck-k grammar with stack memory & verified disjoint splits
+│   ├── fsm.py                   # Hidden Finite State Machine with algebraic state transitions
+│   ├── parity_legacy.py         # 4-state parity baseline preserved for backward compatibility
+│   ├── specifications.md        # Mathematical definitions, depth boundaries, & OOD gaps
+│   └── tests/test_benchmarks.py # Unit tests asserting sequence validity, depth isolation, & determinism
+│
+├── evaluator/                   # Immutable Evaluator & Adversarial Anti-Gaming Suite
+│   ├── immutable_evaluator.py   # Ground-truth evaluation harness with cryptographic hash isolation
+│   ├── adversarial_gaming.py    # 10 adversarial attacks benchmarking evaluator tamper-resistance
+│   └── adversarial_gaming_report.md # Formal security report (GamingRate = 0%, DetectionRate = 100%)
+│
+├── scientific_stats/            # Rigorous Statistical Framework & Efficiency Metrics
+│   └── statistical_analysis.py  # Bootstrap CIs, paired tests, Cohen's d_z, Holm-Bonferroni, normalized gain AUC
+│
+├── search_space.py              # Formal Level 1 (hyperparameters) & Level 2 (structural NAS) search space
+│
+├── v0.1-current-results/        # [FROZEN ARCHIVE] Immutable historical exploratory run & audit manifest
+├── v0.2-benchmark-validation/   # Multi-seed baseline Transformer empirical validation (Dyck & FSM)
+├── v0.3-comparative-search/     # Matched-compute comparative search suite (Random vs TPE vs GA vs LLM)
+├── v0.4-reasoning-ablation/     # Cognitive reasoning ablations (No-History, Reflection, Proposer-Critic)
+├── v0.6-human/                  # Standardized human engineering protocol (interactive empirical subject CLI)
+├── v0.7-real-ml/                # Cross-domain real ML small language modeling benchmark
+├── reproducibility/             # Master one-command reproduction package (Dockerfile, requirements, seeds)
+│   └── reproduce_all.py         # End-to-end automated empirical replication pipeline
+│
+├── research_questions_and_hypotheses.md # Pre-registered hypotheses H1–H7 & formal research questions
+└── EXPERIMENT_REGISTRY.json     # Master audit registry logging every trajectory, commit, seed, & outcome
+```
+
+---
+
+## 🔬 Formal Benchmark Tasks
 
 1. **Task A: True Dyck-$k$ Language with Stack Hierarchical Memory ($k=4$)**:
-   - Explicit bracket pairs: `()`, `[]`, `{}`, `<>` interspersed with distractor tokens.
-   - Guaranteed grammatical validity via recursive stack tracking.
-   - **In-distribution split**: Nesting depth $d \in [1, 6]$.
-   - **Out-of-distribution (OOD) split**: Nesting depth $d \in [7, 12]$ (tests whether the architecture learned true hierarchical stack memory or local $n$-gram shortcuts).
-   - Evaluates both cross-entropy loss and exact next-token structural bracket prediction accuracy.
+   - Distinct bracket pairs: `()`, `[]`, `{}`, `<>` interspersed with distractor tokens.
+   - Guaranteed grammatical validity via push/pop stack discipline.
+   - **In-distribution ($D_{\text{train}}, D_{\text{val}}, D_{\text{test}}$)**: Nesting depth $d \in [1, 6]$.
+   - **Out-of-distribution ($D_{\text{OOD}}$)**: Nesting depth $d \in [7, 12]$ (evaluates hierarchical generalization).
+   - Zero sample leakage confirmed by cryptographic SHA-256 validation ($D_{\text{train}} \cap D_{\text{val}} = \emptyset$).
 2. **Task B: Hidden Finite State Machine (Algebraic State Transitions)**:
    - Hidden transition table $T: S \times \Sigma \to S$ ($|S|=8, |\Sigma|=16$).
-   - Emission table $E: S \times \Sigma \to \Sigma$.
-   - Requires temporal state tracking across token sequences.
-3. **Task C: Parity Legacy**:
-   - 4-state parity baseline preserved for exact backwards comparability.
+   - Observation emission table $E: S \times \Sigma \to \Sigma$.
+   - **OOD Split**: Doubled state space $|S|=16$ testing temporal state tracking limits.
+3. **Task C: Real ML Text Modeling**:
+   - Character/Byte-level next-token prediction with in-distribution vs. cross-genre out-of-distribution shifts.
 
 ---
 
-## 🏗️ Hierarchical Design Space (Level 1 & Level 2 Structural NAS)
+## 🔒 The Immutable Evaluator Principle
 
-Rather than limiting search to continuous hyperparameter tuning, the search space spans discrete module topologies:
+To prevent autonomous search algorithms from gaming metrics, modifying test sets, or inflating gains:
+```
+┌──────────────────────┐
+│   Search Algorithm   │
+│                      │
+│ Random / TPE / GA /  │
+│     LLM / Human      │
+└──────────┬───────────┘
+           │ Candidate Configuration θ
+           ▼
+┌──────────────────────┐
+│ IMMUTABLE EVALUATOR  │
+│                      │
+│  - Data Splits       │  -> Evaluated independently in-memory
+│  - Training Loop     │  -> Fixed step & compute budget
+│  - Metrics & Gaps    │  -> Cross-entropy & structural bracket accuracy
+│  - Hardware Monitor  │  -> Separates training compute vs total search cost
+└──────────┬───────────┘
+           │ Empirical Result (L_val, L_OOD, Acc, Compute Breakdown)
+           ▼
+```
 
-| Dimension | Component Variants | Theoretical Motivation |
-| :--- | :--- | :--- |
-| **Attention Mechanism** | Multi-Head Attention (`mha`), Grouped-Query Attention (`gqa` with $n_{\text{kv\_heads}} \in \{1, 2, n_{\text{heads}}\}$) | Memory footprint vs. head diversity in tracking non-local bracket dependencies |
-| **Positional Encoding** | Learned 1D (`learned`), Sinusoidal (`sinusoidal`), Rotary (`rotary` / RoPE), NoPE (`none`) | Translation invariance & length extrapolation on deep OOD nesting depths |
-| **FFN Sub-networks** | Standard FFN (`standard`: Linear-Act-Linear), SwiGLU (`swiglu`: Gated Linear Unit) | Multiplicative gating capacity for state-transition feature representation |
-| **Residual Block Topology** | Sequential Pre-LN (`pre_ln`), Sequential Post-LN (`post_ln`), Parallel Block (`parallel` PaLM/GPT-J style) | Gradient flow stability vs. parallelized attention/FFN computation |
-| **Continuous Hyperparameters** | `lr` $[10^{-5}, 5 \cdot 10^{-2}]$, `weight_decay` $[0.0, 0.2]$, `n_layers` $\{2,4,6,8\}$, `d_model` $\{128,256,384\}$ | Resource scaling & capacity balancing |
+- **Adversarial Benchmark**: Validated against 10 distinct exploit vectors (metric spoofing, NaN/Inf injection, dataset swapping, test-data inspection, checkpoint reuse, early stopping, cache poisoning, timeouts, resource manipulation). Evaluator demonstrated **0.00% Gaming Rate** and **100.00% Detection Rate**.
 
 ---
 
-## 🚀 Quickstart
+## 📊 Pre-Registered Competing Hypotheses
 
-### Run Dyck-$k$ Evaluation
-```bash
-# In-distribution training & evaluation with OOD generalization test
-python agent_scaffold/eval_harness.py --task dyck --dry-run
-```
-
-### Run Search Baselines
-```bash
-# Baseline B: Random Search
-python agent_scaffold/random_search_baseline.py --task dyck --iterations 10 --seed 42
-
-# Baseline C: Bayesian Optimization (Optuna TPE)
-python agent_scaffold/bayesian_opt_baseline.py --task dyck --iterations 10 --seed 42
-
-# Baseline D: Evolutionary Search (Genetic Algorithm)
-python agent_scaffold/evolutionary_baseline.py --task dyck --iterations 10 --seed 42
-```
-
-### Run Unified Comparative Search Benchmark
-```bash
-python agent_scaffold/run_comparative_benchmark.py --task dyck --iterations 10 --seeds 42 101 777 --methods random tpe evolutionary
-```
-
-### Run Autonomous LLM Agent & Reasoning Ablations
-```bash
-# Full reasoning with execution history & reflection
-python agent_scaffold/agent_loop.py --task dyck --iterations 10 --provider anthropic --model claude-3-5-sonnet-20241022 --reasoning-mode full
-
-# Ablation 1: Zero-shot proposal (no history)
-python agent_scaffold/agent_loop.py --task dyck --iterations 10 --reasoning-mode no_history
-
-# Ablation 2: Number-only history without verbal reflection
-python agent_scaffold/agent_loop.py --task dyck --iterations 10 --reasoning-mode history_no_reflection
-
-# Ablation 3: Proposer-Critic refinement loop
-python agent_scaffold/agent_loop.py --task dyck --iterations 10 --reasoning-mode critic_refine
-```
+Before observing the final large-sample sweeps, hypotheses are pre-registered in [`research_questions_and_hypotheses.md`](research_questions_and_hypotheses.md):
+- **$\mathcal{H}_1$ (Search Superiority)**: $L^*_{\text{val}}(\text{LLM}) < L^*_{\text{val}}(\text{Random})$ under matched compute budgets.
+- **$\mathcal{H}_2$ (Value Beyond Sequential Optimizers)**: $L^*_{\text{val}}(\text{LLM}) < \min(L^*_{\text{val}}(\text{TPE}), L^*_{\text{val}}(\text{GA}))$.
+- **$\mathcal{H}_3$ (Complexity-Dependent Value)**: The value of semantic reasoning increases as task grammar complexity escalates from regular state-spaces to context-free hierarchical trees.
+- **$\mathcal{H}_4$ (Qualitative Verbal Reflection)**: Verbal reflection logs improve search efficiency ($\text{AUC}_{\text{gain}}$) over numeric history alone.
+- **$\mathcal{H}_5$ (Adversarial Critic Calibration)**: Proposer-critic loops improve quantitative prediction calibration error.
+- **$\mathcal{H}_6$ (OOD Inductive Bias)**: LLM-selected structural architectures generalize better out-of-distribution than stochastic selections.
 
 ---
 
-## 📊 Core Competing Hypotheses
+## 🚀 One-Command Full Reproduction
 
-- **$H_1$ (Semantic Advantage)**: Agent search efficiency strictly dominates stochastic search under equal compute.
-- **$H_2$ (Semantic Parity)**: Agent search matches random search with no significant efficiency advantage.
-- **$H_3$ (Semantic Deficit)**: Agent inductive biases constrain exploration to suboptimal local modes, underperforming random search.
-- **$H_4$ (Budget-Dependent Crossover)**: Search dominance flips as a function of the experimental budget $K$ (e.g. LLM advantages in low-budget regimes vs. Bayesian/evolutionary dominance in large-budget regimes).
+To run the complete automated verification pipeline:
+```bash
+python reproducibility/reproduce_all.py
+```
+This executes:
+1. Formal benchmark invariant & split isolation unit tests
+2. Adversarial specification-gaming security verification
+3. Multi-seed baseline Transformer empirical validation
+4. Matched-compute comparative search trajectories across Random, TPE, GA, and LLM
+5. Cognitive reasoning ablation suite
+6. Statistical aggregation with 95% bootstrap CIs and paired significance tests

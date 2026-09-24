@@ -41,7 +41,9 @@ from search_space import (
 from scientific_stats.statistical_analysis import (
     summarize_distribution,
     compare_two_search_arms,
-    calculate_auc_search_curve
+    calculate_normalized_gain_auc,
+    calculate_auc_search_curve,
+    evaluate_hypothesis_calibration
 )
 from agent_scaffold.llm_agent import LLMResearchAgent
 
@@ -153,12 +155,37 @@ class ComparativeSearchBenchmark:
                     cand_cfg = sample_random_candidate(rng)
                     hypo_text = f"LLM fallback random proposal due to error: {e}"
 
-            # Immutable Evaluation
-            eval_res = self.evaluator.train_and_evaluate_candidate(
-                config=cand_cfg,
-                max_steps=self.steps_per_candidate,
-                timeout_seconds=self.eval_timeout
-            )
+            # Immutable Evaluation with robust failure recovery
+            try:
+                eval_res = self.evaluator.train_and_evaluate_candidate(
+                    config=cand_cfg,
+                    max_steps=self.steps_per_candidate,
+                    timeout_seconds=self.eval_timeout
+                )
+            except TimeoutError as te:
+                print(f"    [Iteration {it}] TIMEOUT: candidate exceeded budget limit ({self.eval_timeout}s).")
+                eval_res = {
+                    "train_loss": 99.0,
+                    "val_loss": 99.0,
+                    "ood_loss": 99.0,
+                    "val_struct_acc": 0.0,
+                    "ood_struct_acc": 0.0,
+                    "generalization_gap_rel": 0.0,
+                    "gpu_seconds": round(self.eval_timeout, 3),
+                    "status": "TIMEOUT"
+                }
+            except Exception as e:
+                print(f"    [Iteration {it}] CRASH: {type(e).__name__}: {e}")
+                eval_res = {
+                    "train_loss": 99.0,
+                    "val_loss": 99.0,
+                    "ood_loss": 99.0,
+                    "val_struct_acc": 0.0,
+                    "ood_struct_acc": 0.0,
+                    "generalization_gap_rel": 0.0,
+                    "gpu_seconds": 1.0,
+                    "status": f"FAILED_{type(e).__name__}"
+                }
 
             # Update Optuna if TPE
             if method == "tpe":
@@ -198,18 +225,18 @@ class ComparativeSearchBenchmark:
                 "actual_delta_loss": actual_delta
             })
 
-        # Calculate Search Efficiency (AUC)
+        # Calculate Search Efficiency (Normalized Performance Gain AUC - Higher is Better)
         gpu_times = [h["cumulative_gpu_sec"] for h in history]
         best_losses = [h["best_val_loss"] for h in history]
-        auc = calculate_auc_search_curve(gpu_times, best_losses)
+        auc_gain = calculate_normalized_gain_auc(gpu_times, best_losses, base_res["val_loss"])
+        raw_loss_auc = calculate_auc_search_curve(gpu_times, best_losses)
 
-        # Hypothesis calibration for LLM
-        calibration_mae = None
+        # Extended Hypothesis Calibration for LLM
+        calibration_report = None
         if method == "llm":
-            pred_actual_pairs = [(h["predicted_delta_loss"], h["actual_delta_loss"]) for h in history[1:]]
-            if pred_actual_pairs:
-                mae = sum(abs(p - a) for p, a in pred_actual_pairs) / len(pred_actual_pairs)
-                calibration_mae = round(mae, 6)
+            preds = [h["predicted_delta_loss"] for h in history[1:]]
+            actuals = [h["actual_delta_loss"] for h in history[1:]]
+            calibration_report = evaluate_hypothesis_calibration(preds, actuals)
 
         return {
             "method": method,
@@ -220,8 +247,9 @@ class ComparativeSearchBenchmark:
             "best_ood_loss": best_ood,
             "improvement_pct": round(((base_res["val_loss"] - best_val) / base_res["val_loss"]) * 100.0, 2),
             "total_gpu_seconds": round(cum_gpu_sec, 3),
-            "auc_search_curve": auc,
-            "calibration_mae": calibration_mae,
+            "auc_normalized_gain": auc_gain,
+            "raw_loss_auc": raw_loss_auc,
+            "calibration_report": calibration_report,
             "trajectory": history
         }
 

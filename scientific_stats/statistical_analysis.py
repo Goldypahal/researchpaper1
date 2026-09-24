@@ -115,21 +115,145 @@ def holm_bonferroni_correction(p_values: List[float]) -> List[Tuple[float, bool]
     return list(zip(adjusted, significant))
 
 
-def calculate_auc_search_curve(compute_points: List[float], performance_points: List[float]) -> float:
+def calculate_normalized_gain_auc(
+    compute_points: List[float],
+    incumbent_losses: List[float],
+    base_loss: float
+) -> float:
     r"""
-    Calculates Area Under the Search Curve:
-    AUC = \int_0^B P(b) db
-    Higher AUC indicates finding high-performing solutions earlier in the compute budget.
+    Calculates Area Under the Normalized Performance Gain Curve:
+      Gain(b) = max(0.0, base_loss - L*(b)) / max(1e-8, base_loss)
+      AUC_gain = \int_0^B Gain(b) db
+    HIGHER is strictly better: reflects discovering larger performance gains earlier in the search budget.
     """
+    x = np.asarray(compute_points, dtype=np.float64)
+    losses = np.asarray(incumbent_losses, dtype=np.float64)
+    if len(x) < 2:
+        return 0.0
+    sort_idx = np.argsort(x)
+    x_sorted = x[sort_idx]
+    losses_sorted = losses[sort_idx]
+    denom = max(1e-8, base_loss)
+    gains = np.maximum(0.0, (base_loss - losses_sorted) / denom)
+    auc = np.trapz(gains, x_sorted)
+    return round(float(auc), 6)
+
+
+def calculate_auc_search_curve(compute_points: List[float], performance_points: List[float], base_loss: Optional[float] = None) -> float:
+    """Backwards-compatible wrapper routing to calculate_normalized_gain_auc."""
+    if base_loss is not None:
+        return calculate_normalized_gain_auc(compute_points, performance_points, base_loss)
+    # If base_loss is not explicitly provided, treat performance_points as raw gain
     x = np.asarray(compute_points, dtype=np.float64)
     y = np.asarray(performance_points, dtype=np.float64)
     if len(x) < 2:
         return 0.0
     sort_idx = np.argsort(x)
-    x_sorted = x[sort_idx]
-    y_sorted = y[sort_idx]
-    auc = np.trapz(y_sorted, x_sorted)
-    return round(float(auc), 4)
+    return round(float(np.trapz(y[sort_idx], x[sort_idx])), 6)
+
+
+def paired_difference_analysis(
+    arm_a_values: List[float],
+    arm_b_values: List[float],
+    arm_a_name: str = "Arm_A",
+    arm_b_name: str = "Arm_B"
+) -> Dict[str, Any]:
+    """
+    Conducts paired hypothesis tests exploiting matched seed experimental units:
+      D_i = Arm_A[i] - Arm_B[i]
+    """
+    a = np.asarray(arm_a_values, dtype=np.float64)
+    b = np.asarray(arm_b_values, dtype=np.float64)
+    if len(a) != len(b):
+        raise ValueError(f"Paired comparison requires identical sample sizes: len(a)={len(a)} != len(b)={len(b)}")
+
+    diff = a - b
+    mean_d = float(np.mean(diff))
+    std_d = float(np.std(diff, ddof=1)) if len(diff) > 1 else 0.0
+    dz = mean_d / std_d if std_d > 1e-12 else 0.0
+
+    try:
+        t_stat, t_pval = stats.ttest_rel(a, b)
+    except Exception:
+        t_stat, t_pval = 0.0, 1.0
+
+    try:
+        w_stat, w_pval = stats.wilcoxon(diff, alternative='two-sided')
+    except Exception:
+        w_stat, w_pval = 0.0, 1.0
+
+    ci_low, ci_high = bootstrap_ci(diff, stat_fn=np.mean)
+
+    return {
+        "comparison": f"{arm_a_name} - {arm_b_name}",
+        "paired_mean_difference": round(mean_d, 6),
+        "paired_std_difference": round(std_d, 6),
+        "paired_cohens_dz": round(float(dz), 4),
+        "ci_95_difference": (ci_low, ci_high),
+        "paired_t_test": {
+            "statistic": round(float(t_stat), 4),
+            "p_value": round(float(t_pval), 6)
+        },
+        "wilcoxon_signed_rank": {
+            "statistic": round(float(w_stat), 4),
+            "p_value": round(float(w_pval), 6)
+        }
+    }
+
+
+def evaluate_hypothesis_calibration(
+    predicted_deltas: List[float],
+    actual_deltas: List[float]
+) -> Dict[str, Any]:
+    """
+    Comprehensive metacognitive calibration analysis:
+      1. Mean Absolute Error (MAE)
+      2. Directional Accuracy (% of predictions correctly identifying gain vs loss)
+      3. Spearman Rank Correlation (assessing relative ranking awareness)
+      4. Confidence-Binned Expected Calibration
+    """
+    pred = np.asarray(predicted_deltas, dtype=np.float64)
+    actual = np.asarray(actual_deltas, dtype=np.float64)
+    if len(pred) == 0:
+        return {}
+
+    mae = float(np.mean(np.abs(pred - actual)))
+
+    pred_sign = np.sign(pred)
+    actual_sign = np.sign(actual)
+    directional_acc = float(np.mean(pred_sign == actual_sign)) * 100.0
+
+    try:
+        spearman_rho, spearman_pval = stats.spearmanr(pred, actual)
+    except Exception:
+        spearman_rho, spearman_pval = 0.0, 1.0
+
+    bins = [0.0, 0.02, 0.05, 0.10, float('inf')]
+    bin_labels = ["[0, 0.02)", "[0.02, 0.05)", "[0.05, 0.10)", ">= 0.10"]
+    binned_metrics = []
+
+    for idx in range(len(bins) - 1):
+        low, high = bins[idx], bins[idx + 1]
+        mask = (np.abs(pred) >= low) & (np.abs(pred) < high)
+        if np.sum(mask) > 0:
+            binned_metrics.append({
+                "bin": bin_labels[idx],
+                "count": int(np.sum(mask)),
+                "mean_predicted": round(float(np.mean(pred[mask])), 6),
+                "mean_actual": round(float(np.mean(actual[mask])), 6),
+                "bin_error": round(float(np.abs(np.mean(pred[mask]) - np.mean(actual[mask]))), 6)
+            })
+
+    return {
+        "n_predictions": len(pred),
+        "mae": round(mae, 6),
+        "directional_accuracy_pct": round(directional_acc, 2),
+        "spearman_rank_correlation": {
+            "rho": round(float(spearman_rho), 4),
+            "p_value": round(float(spearman_pval), 6)
+        },
+        "confidence_binned_calibration": binned_metrics
+    }
 
 
 def summarize_distribution(data: List[float], seed: int = 42) -> Dict[str, Any]:

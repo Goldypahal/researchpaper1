@@ -41,10 +41,21 @@ class EvaluationSecurityError(Exception):
 
 
 class ImmutableEvaluator:
-    def __init__(self, task: str = "dyck", seed: int = 42, device: str = "cpu"):
+    def __init__(self, task: str = "dyck", seed: int = 42, device: Optional[str] = None):
         self.task = task.lower()
         self.seed = seed
+        
+        # Explicit hardware detection: never label CPU execution as GPU compute
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(device)
+        
+        if self.device.type == "cuda":
+            self.device_name = torch.cuda.get_device_name(self.device)
+        else:
+            import platform
+            self.device_name = f"CPU ({platform.processor() or platform.machine()})"
+            
         self.evaluator_id = f"IMMUTABLE_EVAL_{self.task.upper()}_SEED_{seed}"
         
         # Load benchmark splits into private immutable store
@@ -232,14 +243,23 @@ class ImmutableEvaluator:
             step_count += 1
 
         train_loss_final = train_loss_accum / max(1, step_count)
-        elapsed_gpu_sec = time.time() - start_time
+        training_compute_sec = time.time() - start_time
 
         # 5. Immutable independent evaluation
+        eval_start = time.time()
         eval_metrics = self.evaluate_model(model, batch_size=batch_size)
+        eval_compute_sec = time.time() - eval_start
+        
+        total_wall_clock = time.time() - start_time
+        is_cuda = (self.device.type == "cuda")
+        gpu_seconds = total_wall_clock if is_cuda else 0.0
+        cpu_seconds = 0.0 if is_cuda else total_wall_clock
 
         return {
             "task": self.task,
             "seed": self.seed,
+            "device": self.device.type,
+            "device_name": self.device_name,
             "train_loss": round(train_loss_final, 6),
             "val_loss": eval_metrics["val_loss"],
             "test_loss": eval_metrics["test_loss"],
@@ -250,7 +270,11 @@ class ImmutableEvaluator:
             "generalization_gap_abs": eval_metrics["generalization_gap_abs"],
             "generalization_gap_rel": eval_metrics["generalization_gap_rel"],
             "parameter_count": num_params,
-            "gpu_seconds": round(elapsed_gpu_sec, 3),
+            "training_compute_seconds": round(training_compute_sec, 3),
+            "eval_compute_seconds": round(eval_compute_sec, 3),
+            "total_wall_clock_seconds": round(total_wall_clock, 3),
+            "gpu_seconds": round(gpu_seconds, 3),
+            "cpu_seconds": round(cpu_seconds, 3),
             "steps_completed": step_count,
             "evaluator_signature": self.evaluator_id
         }

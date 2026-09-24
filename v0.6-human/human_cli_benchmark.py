@@ -62,34 +62,44 @@ def run_human_session(
 
     print(f"[Iteration 0] Baseline established: L_val = {best_val:.4f} | L_ood = {best_ood:.4f}\n")
 
-    # If non-interactive (batch reproduction / pre-recorded human trials), use structured human expert heuristics
-    default_expert_trials = [
+    # METHODOLOGICAL DISTINCTION:
+    # If not interactive, this is strictly a 'human_protocol_simulation' (interface smoke test).
+    # Real human data is logged only when interactive=True with live human inputs.
+    is_simulation = not interactive
+    method_label = "human_protocol_simulation" if is_simulation else "human_empirical_subject"
+    
+    if is_simulation:
+        print("[METHODOLOGICAL NOTICE] Running in simulation/smoketest mode.")
+        print("  Tag: 'human_protocol_simulation'. NOT empirical human subject data.\n")
+    
+    # Pre-recorded heuristic trajectory for interface smoke-testing only
+    smoke_test_trials = [
         {
-            "hypothesis": "Increase depth from 6 to 8 layers and use RMSNorm to stabilize gradient flow across deep Dyck brackets.",
+            "hypothesis": "[Simulation Smoke-test] Increase depth from 6 to 8 layers with RMSNorm.",
             "predicted_delta_loss": 0.05,
             "modifications": {"n_layers": 8, "norm_type": "rmsnorm", "lr": 5e-4},
             "think_time_sec": 180.0
         },
         {
-            "hypothesis": "Switch from learned positional embeddings to Rotary Position Embeddings (RoPE) to capture relative bracket distances.",
+            "hypothesis": "[Simulation Smoke-test] Switch to Rotary Position Embeddings (RoPE).",
             "predicted_delta_loss": 0.08,
             "modifications": {"pos_encoding": "rotary", "d_model": 256, "n_heads": 4},
             "think_time_sec": 240.0
         },
         {
-            "hypothesis": "Adopt SwiGLU feed-forward network to expand expressive capacity without scaling layers further.",
+            "hypothesis": "[Simulation Smoke-test] Adopt SwiGLU feed-forward network.",
             "predicted_delta_loss": 0.04,
             "modifications": {"ffn_type": "swiglu", "d_ff": 1024, "lr": 8e-4},
             "think_time_sec": 150.0
         },
         {
-            "hypothesis": "Decrease learning rate to 2e-4 and add moderate weight decay 0.05 to prevent overfitting on shallow training sequences.",
+            "hypothesis": "[Simulation Smoke-test] Decrease lr to 2e-4 with weight decay 0.05.",
             "predicted_delta_loss": 0.03,
             "modifications": {"lr": 2e-4, "weight_decay": 0.05},
             "think_time_sec": 120.0
         },
         {
-            "hypothesis": "Switch to Pre-LN with 8 attention heads for finer query-key resolution on bracket matching.",
+            "hypothesis": "[Simulation Smoke-test] Switch to Pre-LN with 8 attention heads.",
             "predicted_delta_loss": 0.02,
             "modifications": {"n_heads": 8, "d_model": 256, "topology": "pre_ln"},
             "think_time_sec": 90.0
@@ -97,13 +107,42 @@ def run_human_session(
     ]
 
     for it in range(1, max_iterations + 1):
-        trial_info = default_expert_trials[min(it - 1, len(default_expert_trials) - 1)]
-        hypo = trial_info["hypothesis"]
-        pred_delta = trial_info["predicted_delta_loss"]
-        think_time = trial_info["think_time_sec"]
+        if interactive:
+            print(f"\n--- [Iteration {it}/{max_iterations}] Interactive Human Decision ---")
+            print(f"Current Incumbent Best Validation Loss: {best_val:.4f}")
+            print(f"Current Incumbent OOD Loss: {best_ood:.4f}")
+            t_think_start = time.time()
+            hypo = input("Enter your scientific hypothesis rationale: ").strip()
+            pred_delta_str = input("Enter your predicted delta loss reduction (e.g. 0.04): ").strip()
+            try:
+                pred_delta = float(pred_delta_str)
+            except ValueError:
+                pred_delta = 0.0
+            
+            # Interactive parameter selection
+            print("Specify architectural modifications (leave blank to keep current):")
+            cand_cfg = dict(base_cfg)
+            lr_in = input(f"Learning rate [{cand_cfg['lr']}]: ").strip()
+            if lr_in: cand_cfg["lr"] = float(lr_in)
+            layers_in = input(f"Number of layers [{cand_cfg['n_layers']}]: ").strip()
+            if layers_in: cand_cfg["n_layers"] = int(layers_in)
+            heads_in = input(f"Attention heads [{cand_cfg['n_heads']}]: ").strip()
+            if heads_in: cand_cfg["n_heads"] = int(heads_in)
+            pos_in = input(f"Positional encoding [{cand_cfg['pos_encoding']}]: ").strip()
+            if pos_in: cand_cfg["pos_encoding"] = pos_in
+            ffn_in = input(f"FFN type [{cand_cfg['ffn_type']}]: ").strip()
+            if ffn_in: cand_cfg["ffn_type"] = ffn_in
+            
+            think_time = round(time.time() - t_think_start, 2)
+        else:
+            trial_info = smoke_test_trials[min(it - 1, len(smoke_test_trials) - 1)]
+            hypo = trial_info["hypothesis"]
+            pred_delta = trial_info["predicted_delta_loss"]
+            think_time = trial_info["think_time_sec"]
 
-        cand_cfg = dict(base_cfg)
-        cand_cfg.update(trial_info["modifications"])
+            cand_cfg = dict(base_cfg)
+            cand_cfg.update(trial_info["modifications"])
+
         cand_cfg = sanitize_configuration(cand_cfg)
 
         eval_res = evaluator.train_and_evaluate_candidate(cand_cfg, max_steps=steps_per_candidate)
@@ -146,7 +185,8 @@ def run_human_session(
 
     trajectory_result = {
         "participant_id": participant_id,
-        "method": "human_expert",
+        "method": method_label,
+        "is_simulation": is_simulation,
         "task": task,
         "seed": seed,
         "baseline_val_loss": base_res["val_loss"],
@@ -163,10 +203,11 @@ def run_human_session(
     out_dir = os.path.dirname(__file__)
     traces_dir = os.path.join(out_dir, "traces")
     os.makedirs(traces_dir, exist_ok=True)
-    trace_path = os.path.join(traces_dir, f"trace_human_{participant_id}_{task}_seed_{seed}.json")
+    prefix = "sim" if is_simulation else "empirical"
+    trace_path = os.path.join(traces_dir, f"trace_{prefix}_{participant_id}_{task}_seed_{seed}.json")
     with open(trace_path, "w") as f:
         json.dump(trajectory_result, f, indent=2)
-    print(f"\n[Saved Human Trajectory] -> {trace_path}")
+    print(f"\n[Saved Trajectory] -> {trace_path}")
 
     # Update Registry
     reg_path = os.path.abspath(os.path.join(out_dir, "..", "EXPERIMENT_REGISTRY.json"))
@@ -174,13 +215,13 @@ def run_human_session(
         with open(reg_path, "r") as f:
             reg = json.load(f)
         reg["experiments"].append({
-            "experiment_id": f"EXP-PHASE14-HUMAN-{participant_id.upper()}-{task.upper()}-SEED-{seed}",
-            "git_commit": "c7d3f3a0d90ed05d40277bac3f14ab001d2151bf",
+            "experiment_id": f"EXP-PHASE14-{prefix.upper()}-{participant_id.upper()}-{task.upper()}-SEED-{seed}",
+            "git_commit": "9c475fa",
             "task": task,
-            "method": "human_expert_baseline",
+            "method": method_label,
             "seed": seed,
-            "model": "Human_ML_Researcher",
-            "budget": f"K={max_iterations}, {cum_gpu_sec:.1f}s GPU, {total_think_time/60.0:.1f}m think",
+            "model": "Human_Subject" if not is_simulation else "Mock_Simulation",
+            "budget": f"K={max_iterations}, {cum_gpu_sec:.1f}s compute, {total_think_time/60.0:.1f}m think",
             "dataset_version": f"{task}_v1_0",
             "prompt_version": "N/A",
             "result": {
@@ -188,7 +229,8 @@ def run_human_session(
                 "best_ood_loss": best_ood,
                 "improvement_pct": trajectory_result["improvement_pct"],
                 "auc_search_curve": auc,
-                "calibration_mae": trajectory_result["calibration_mae"]
+                "calibration_mae": trajectory_result["calibration_mae"],
+                "is_simulation": is_simulation
             },
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "status": "COMPLETED"
