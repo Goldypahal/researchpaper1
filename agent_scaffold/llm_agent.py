@@ -103,6 +103,7 @@ class LLMResearchAgent:
         self.strict = strict
         self.allow_simulation = allow_simulation
         self.base_url = base_url
+        self._last_usage = {}
 
         # Check Kaggle UserSecretsClient if available (running on Kaggle)
         try:
@@ -195,9 +196,10 @@ class LLMResearchAgent:
             # Google Gemini exposes standard OpenAI-compatible API
             self.client = openai.OpenAI(
                 base_url=self.base_url or "https://generativelanguage.googleapis.com/v1beta/openai/",
-                api_key=self.gemini_key
+                api_key=self.gemini_key,
+                timeout=120.0
             )
-            self.model = self.model or "gemini-2.0-flash"
+            self.model = self.model or "gemini-3.6-flash"
             print(f"[LLM Agent] Initialized Google Gemini Client via OpenAI interface (Model: {self.model})", flush=True)
 
         elif self.provider == "groq":
@@ -395,6 +397,8 @@ Output ONLY the final verified/refined JSON matching the original schema.
         result["raw_prompt"] = user_prompt
         result["raw_response"] = raw_response_text
         result["latency_seconds"] = latency
+        result["token_usage"] = getattr(self, "_last_usage", {})
+        result["reasoning_effort"] = "medium" if self.provider == "gemini" else None
         if critic_prompt_hash:
             result["critic_prompt_hash"] = critic_prompt_hash
             result["critic_raw_response"] = critic_raw_response
@@ -440,12 +444,33 @@ Output ONLY the final verified/refined JSON matching the original schema.
                 }
                 if self.provider in ["openai", "groq"]:
                     kwargs["response_format"] = {"type": "json_object"}
+                elif self.provider == "gemini":
+                    # Gemini 3.x uses internal thinking tokens.
+                    # max_tokens is a combined thinking + visible-output budget.
+                    kwargs["max_tokens"] = 8192
+                    kwargs["reasoning_effort"] = "medium"
                 elif self.provider in ["nvidia", "nemotron"]:
                     kwargs["max_tokens"] = 3000
                     kwargs["temperature"] = 0.6
 
                 resp = self.client.chat.completions.create(**kwargs)
                 content = resp.choices[0].message.content
+                if not content:
+                    finish_reason = getattr(resp.choices[0], "finish_reason", None)
+                    raise RuntimeError(
+                        f"Provider '{self.provider}' returned empty content (finish_reason={finish_reason})."
+                    )
+
+                usage = getattr(resp, "usage", None)
+                if usage:
+                    self._last_usage = {
+                        "prompt_tokens": getattr(usage, "prompt_tokens", None),
+                        "completion_tokens": getattr(usage, "completion_tokens", None),
+                        "total_tokens": getattr(usage, "total_tokens", None),
+                    }
+                else:
+                    self._last_usage = {}
+
                 return self._extract_json(content), content
             except Exception as e:
                 last_err = e

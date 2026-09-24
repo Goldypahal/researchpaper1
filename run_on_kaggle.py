@@ -105,7 +105,9 @@ def run_kaggle_sweep(
         methods=methods,
         seeds=seeds,
         max_iterations=iterations,
-        steps_per_candidate=steps_per_cand
+        steps_per_candidate=steps_per_cand,
+        llm_provider=llm_provider,
+        llm_model=llm_model
     )
 
     # 2. Reasoning Ablation Sweep

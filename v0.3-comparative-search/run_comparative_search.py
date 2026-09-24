@@ -55,13 +55,17 @@ class ComparativeSearchBenchmark:
         seed: int = 42,
         max_iterations: int = 10,
         steps_per_candidate: int = 60,
-        eval_timeout: float = 300.0
+        eval_timeout: float = 300.0,
+        llm_provider: str = None,
+        llm_model: str = None
     ):
         self.task = task.lower()
         self.seed = seed
         self.max_iterations = max_iterations
         self.steps_per_candidate = steps_per_candidate
         self.eval_timeout = eval_timeout
+        self.llm_provider = llm_provider
+        self.llm_model = llm_model
         self.evaluator = ImmutableEvaluator(task=self.task, seed=self.seed)
 
     def run_trajectory(self, method: str, llm_mode: str = "full") -> Dict[str, Any]:
@@ -126,6 +130,8 @@ class ComparativeSearchBenchmark:
             # Simulation fallback is strictly forbidden unless explicitly enabled.
             allow_sim = os.environ.get("ALLOW_LLM_SIMULATION", "0").lower() in ("1", "true", "yes")
             agent = LLMResearchAgent(
+                provider=self.llm_provider,
+                model=self.llm_model,
                 strict=True,
                 allow_simulation=allow_sim,
                 reasoning_mode=llm_mode
@@ -184,6 +190,8 @@ class ComparativeSearchBenchmark:
                         "provider": proposal.get("provider"),
                         "model": proposal.get("model"),
                         "reasoning_mode": proposal.get("reasoning_mode"),
+                        "reasoning_effort": proposal.get("reasoning_effort"),
+                        "token_usage": proposal.get("token_usage", {}),
                         "latency_seconds": proposal.get("latency_seconds"),
                         "critic_prompt_hash": proposal.get("critic_prompt_hash")
                     }

@@ -35,7 +35,9 @@ def run_comparative_experiment(
     seeds: List[int] = [42, 101, 202, 303, 404],
     max_iterations: int = 10,
     steps_per_candidate: int = 25,
-    eval_timeout: float = 300.0
+    eval_timeout: float = 300.0,
+    llm_provider: str = None,
+    llm_model: str = None
 ):
     print("=====================================================================", flush=True)
     print("PHASE 8: MATCHED-COMPUTE COMPARATIVE SEARCH BENCHMARK", flush=True)
@@ -43,6 +45,9 @@ def run_comparative_experiment(
     print(f"Methods: {methods}", flush=True)
     print(f"Seeds: {seeds} (N={len(seeds)} replications per arm)", flush=True)
     print(f"Horizon: K={max_iterations} iterations, {steps_per_candidate} steps per candidate", flush=True)
+    if "llm" in methods:
+        print(f"LLM Provider: {llm_provider}", flush=True)
+        print(f"LLM Model: {llm_model}", flush=True)
     print("=====================================================================\n", flush=True)
 
     out_dir = os.path.dirname(__file__)
@@ -88,7 +93,9 @@ def run_comparative_experiment(
                     seed=s,
                     max_iterations=max_iterations,
                     steps_per_candidate=steps_per_candidate,
-                    eval_timeout=eval_timeout
+                    eval_timeout=eval_timeout,
+                    llm_provider=llm_provider,
+                    llm_model=llm_model
                 )
                 res = bench.run_trajectory(method=method)
                 elapsed = time.time() - t0
