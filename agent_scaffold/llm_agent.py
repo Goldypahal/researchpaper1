@@ -90,73 +90,168 @@ class SimulationDisallowedError(RuntimeError):
 
 class LLMResearchAgent:
     def __init__(self, provider=None, model=None, api_key=None, strict=True,
-                 allow_simulation=False, reasoning_mode="full"):
+                 allow_simulation=False, reasoning_mode="full", base_url=None):
         """
         strict: if True (default), refuses to silently use the simulation
-            fallback when no API key/provider is found. This is what you want
-            for any run whose output might be reported in the paper.
+            fallback when no API key/provider is found. This is mandatory for
+            any empirical research runs reported in the paper.
         allow_simulation: must be explicitly set True (together with
             strict=False, or on its own) to permit the simulation path.
-            Two separate knobs so a single typo can't accidentally unlock it.
         reasoning_mode: one of 'full', 'no_history', 'history_no_reflection', 'critic_refine'.
-            Used for ablation studies evaluating the marginal value of history, reflection, and critics.
         """
         self.reasoning_mode = reasoning_mode
-        self.anthropic_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        self.openai_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self.nvidia_key = api_key if (api_key and str(api_key).startswith("nvapi-")) else os.environ.get("NVIDIA_API_KEY")
         self.strict = strict
         self.allow_simulation = allow_simulation
+        self.base_url = base_url
+
+        # Check Kaggle UserSecretsClient if available (running on Kaggle)
+        try:
+            from kaggle_secrets import UserSecretsClient
+            user_secrets = UserSecretsClient()
+            for key_name in [
+                "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY",
+                "GOOGLE_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY",
+                "NVIDIA_API_KEY", "HF_TOKEN"
+            ]:
+                try:
+                    secret_val = user_secrets.get_secret(key_name)
+                    if secret_val and not os.environ.get(key_name):
+                        os.environ[key_name] = secret_val
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        self.anthropic_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        self.openai_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.gemini_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        self.groq_key = api_key or os.environ.get("GROQ_API_KEY")
+        self.openrouter_key = api_key or os.environ.get("OPENROUTER_API_KEY")
+        self.nvidia_key = api_key if (api_key and str(api_key).startswith("nvapi-")) else os.environ.get("NVIDIA_API_KEY")
 
         if provider:
             self.provider = provider
-        elif self.nvidia_key or (api_key and str(api_key).startswith("nvapi-")):
-            self.provider = "nvidia"
         elif self.anthropic_key:
             self.provider = "anthropic"
         elif self.openai_key:
             self.provider = "openai"
+        elif self.gemini_key:
+            self.provider = "gemini"
+        elif self.groq_key:
+            self.provider = "groq"
+        elif self.openrouter_key:
+            self.provider = "openrouter"
+        elif self.nvidia_key or (api_key and str(api_key).startswith("nvapi-")):
+            self.provider = "nvidia"
+        elif os.environ.get("LOCAL_LLM_MODEL"):
+            self.provider = "local"
         else:
             self.provider = "adaptive_simulation"
 
         if self.provider == "adaptive_simulation" and not self.allow_simulation:
             raise SimulationDisallowedError(
-                "No ANTHROPIC_API_KEY, OPENAI_API_KEY, or NVIDIA_API_KEY found, and no provider "
-                "was explicitly specified. Refusing to silently fall back to "
-                "the scripted simulation, since output from that path is not "
-                "real LLM reasoning and must never be reported as agent output.\n\n"
-                "If this is genuinely intentional (e.g. a plumbing/CI smoke "
-                "test with no API access), construct the agent with "
-                "allow_simulation=True (or pass --allow-simulation on the "
-                "command line) to opt in explicitly."
+                "\n" + "=" * 78 + "\n"
+                "[FATAL ERROR] REAL LLM REASONING REQUIRED BUT NO VALID PROVIDER FOUND\n"
+                "=" * 78 + "\n"
+                "The experiment attempted to initialize the LLM Research Agent, but no real\n"
+                "LLM API key or local model was configured.\n\n"
+                "Checked providers in environment & Kaggle Secrets:\n"
+                f"  - Anthropic Claude (ANTHROPIC_API_KEY): {'FOUND' if self.anthropic_key else 'NOT FOUND'}\n"
+                f"  - OpenAI GPT (OPENAI_API_KEY):           {'FOUND' if self.openai_key else 'NOT FOUND'}\n"
+                f"  - Google Gemini (GEMINI_API_KEY):       {'FOUND' if self.gemini_key else 'NOT FOUND'}\n"
+                f"  - Groq Llama (GROQ_API_KEY):             {'FOUND' if self.groq_key else 'NOT FOUND'}\n"
+                f"  - OpenRouter (OPENROUTER_API_KEY):       {'FOUND' if self.openrouter_key else 'NOT FOUND'}\n"
+                f"  - NVIDIA NIM (NVIDIA_API_KEY):           {'FOUND' if self.nvidia_key else 'NOT FOUND'}\n"
+                f"  - Local HuggingFace (LOCAL_LLM_MODEL):   {os.environ.get('LOCAL_LLM_MODEL') or 'NOT SET'}\n\n"
+                "STRICT MODE IS ACTIVE: Falling back to scripted/adaptive simulation is\n"
+                "STRICTLY FORBIDDEN to protect the scientific integrity of empirical results.\n\n"
+                "HOW TO FIX:\n"
+                "1. If on Kaggle: Add your API key in Kaggle Notebook -> 'Add-ons' -> 'Secrets'\n"
+                "   (e.g., GEMINI_API_KEY, GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY).\n"
+                "2. If locally: export GEMINI_API_KEY='your-key' (or OPENAI_API_KEY / GROQ_API_KEY).\n"
+                "3. If using open weights on Kaggle T4 GPU: set LOCAL_LLM_MODEL='Qwen/Qwen2.5-3B-Instruct'.\n"
+                "4. Only for offline CI plumbing smoke tests: pass --allow-simulation explicitly.\n"
+                "=" * 78 + "\n"
             )
 
         self.model = model
-        if self.provider in ["nvidia", "nemotron"]:
-            import openai
-            self.nvidia_key = self.nvidia_key or api_key or os.environ.get("NVIDIA_API_KEY")
-            self.client = openai.OpenAI(
-                base_url="https://integrate.api.nvidia.com/v1",
-                api_key=self.nvidia_key
-            )
-            self.model = self.model or "nvidia/nemotron-3-ultra-550b-a55b"
-            print(f"[LLM Agent] Initialized NVIDIA NIM Client (Model: {self.model})")
-        elif self.provider == "anthropic":
+        self._init_client(api_key)
+
+    def _init_client(self, api_key=None):
+        if self.provider == "anthropic":
             import anthropic
             self.client = anthropic.Anthropic(api_key=self.anthropic_key)
             self.model = self.model or "claude-3-5-sonnet-20241022"
-            print(f"[LLM Agent] Initialized Anthropic Claude Client (Model: {self.model})")
+            print(f"[LLM Agent] Initialized Anthropic Claude Client (Model: {self.model})", flush=True)
+
         elif self.provider == "openai":
             import openai
-            self.client = openai.OpenAI(api_key=self.openai_key)
+            self.client = openai.OpenAI(api_key=self.openai_key, base_url=self.base_url)
             self.model = self.model or "gpt-4o"
-            print(f"[LLM Agent] Initialized OpenAI Client (Model: {self.model})")
+            print(f"[LLM Agent] Initialized OpenAI Client (Model: {self.model})", flush=True)
+
+        elif self.provider == "gemini":
+            import openai
+            # Google Gemini exposes standard OpenAI-compatible API
+            self.client = openai.OpenAI(
+                base_url=self.base_url or "https://generativelanguage.googleapis.com/v1beta/openai/",
+                api_key=self.gemini_key
+            )
+            self.model = self.model or "gemini-2.0-flash"
+            print(f"[LLM Agent] Initialized Google Gemini Client via OpenAI interface (Model: {self.model})", flush=True)
+
+        elif self.provider == "groq":
+            import openai
+            self.client = openai.OpenAI(
+                base_url=self.base_url or "https://api.groq.com/openai/v1",
+                api_key=self.groq_key
+            )
+            self.model = self.model or "llama-3.3-70b-versatile"
+            print(f"[LLM Agent] Initialized Groq Client (Model: {self.model})", flush=True)
+
+        elif self.provider == "openrouter":
+            import openai
+            self.client = openai.OpenAI(
+                base_url=self.base_url or "https://openrouter.ai/api/v1",
+                api_key=self.openrouter_key
+            )
+            self.model = self.model or "anthropic/claude-3.5-sonnet"
+            print(f"[LLM Agent] Initialized OpenRouter Client (Model: {self.model})", flush=True)
+
+        elif self.provider in ["nvidia", "nemotron"]:
+            import openai
+            self.client = openai.OpenAI(
+                base_url=self.base_url or "https://integrate.api.nvidia.com/v1",
+                api_key=self.nvidia_key
+            )
+            self.model = self.model or "nvidia/nemotron-3-ultra-550b-a55b"
+            print(f"[LLM Agent] Initialized NVIDIA NIM Client (Model: {self.model})", flush=True)
+
+        elif self.provider in ["local", "hf"]:
+            self._init_local_model()
+
         else:
             self.client = None
-            print("[LLM Agent] *** WARNING: RUNNING IN ADAPTIVE SIMULATION MODE ***")
-            print("[LLM Agent] Output is scripted, NOT real LLM reasoning.")
-            print("[LLM Agent] Every returned record will be tagged provider='adaptive_simulation'.")
-            print("[LLM Agent] To connect live Claude reasoning, set ANTHROPIC_API_KEY in your environment.")
+            print("[LLM Agent] *** CAUTION: RUNNING IN SCRIPTED ADAPTIVE SIMULATION MODE ***", flush=True)
+            print("[LLM Agent] Output is scripted proxy heuristics, NOT real LLM reasoning.", flush=True)
+            print("[LLM Agent] Every record will be tagged provider='adaptive_simulation'.", flush=True)
+
+    def _init_local_model(self):
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+        model_id = self.model or os.environ.get("LOCAL_LLM_MODEL", "Qwen/Qwen2.5-3B-Instruct")
+        print(f"[LLM Agent] Loading local HuggingFace model on GPU: {model_id} ...", flush=True)
+        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto",
+            trust_remote_code=True
+        )
+        self.pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
+        self.model = model_id
+        self.client = "local"
+        print(f"[LLM Agent] Local model {model_id} loaded successfully on {model.device}.", flush=True)
 
     def propose_experiment(self, iteration_idx: int, history: list, incumbent_best_loss: float, base_loss: float, task: str = "dyck"):
         """
@@ -227,11 +322,13 @@ Formulate Iteration {iteration_idx}'s hypothesis and concrete parameter modifica
 
         if self.provider == "anthropic":
             result, raw_response_text = self._call_anthropic(user_prompt)
-        elif self.provider in ["nvidia", "nemotron"]:
-            result, raw_response_text = self._call_nvidia(user_prompt)
-        elif self.provider == "openai":
-            result, raw_response_text = self._call_openai(user_prompt)
+        elif self.provider in ["openai", "gemini", "groq", "openrouter", "nvidia", "nemotron"]:
+            result, raw_response_text = self._call_openai_compatible(user_prompt)
+        elif self.provider in ["local", "hf"]:
+            result, raw_response_text = self._call_local_hf(user_prompt)
         else:
+            if not self.allow_simulation:
+                raise SimulationDisallowedError("Simulation disallowed in strict mode.")
             result = self._call_adaptive_simulation(iteration_idx, history_summary, incumbent_best_loss, base_loss, task)
             raw_response_text = json.dumps(result, indent=2)
 
@@ -265,10 +362,10 @@ Output ONLY the final verified/refined JSON matching the original schema.
             try:
                 if self.provider == "anthropic":
                     refined, critic_raw_response = self._call_anthropic(critic_prompt)
-                elif self.provider in ["nvidia", "nemotron"]:
-                    refined, critic_raw_response = self._call_nvidia(critic_prompt)
-                elif self.provider == "openai":
-                    refined, critic_raw_response = self._call_openai(critic_prompt)
+                elif self.provider in ["openai", "gemini", "groq", "openrouter", "nvidia", "nemotron"]:
+                    refined, critic_raw_response = self._call_openai_compatible(critic_prompt)
+                elif self.provider in ["local", "hf"]:
+                    refined, critic_raw_response = self._call_local_hf(critic_prompt)
                 else:
                     # Simulated critic refinement: sanity check head divisibility and dampen optimistic prediction
                     refined = copy.deepcopy(result)
@@ -308,51 +405,80 @@ Output ONLY the final verified/refined JSON matching the original schema.
         """Backwards-compatible wrapper routing directly to propose_experiment."""
         return self.propose_experiment(iteration_idx, history, incumbent_best_loss, base_loss, task=task)
 
-    def _call_nvidia(self, user_prompt, max_retries=5):
+    def verify_connection(self):
+        """Sends a minimal 1-shot test prompt to verify live provider connection."""
+        test_prompt = "Return a JSON object with key 'status' set to 'connected'."
+        print(f"[LLM Agent] Verifying live connection to provider='{self.provider}' (model='{self.model}')...", flush=True)
+        try:
+            if self.provider == "anthropic":
+                res, _ = self._call_anthropic(test_prompt)
+            elif self.provider in ["openai", "gemini", "groq", "openrouter", "nvidia", "nemotron"]:
+                res, _ = self._call_openai_compatible(test_prompt)
+            elif self.provider in ["local", "hf"]:
+                res, _ = self._call_local_hf(test_prompt)
+            else:
+                return False, "Using adaptive_simulation (not a real LLM provider)"
+            print(f"[LLM Agent] Live connection verified successfully: {res}", flush=True)
+            return True, res
+        except Exception as e:
+            print(f"[LLM Agent] Live connection verification FAILED: {e}", flush=True)
+            return False, str(e)
+
+    def _call_openai_compatible(self, user_prompt, max_retries=5):
+        """Unified caller for OpenAI, Gemini, Groq, OpenRouter, and NVIDIA NIM endpoints."""
         last_err = None
         for attempt in range(1, max_retries + 1):
             try:
-                resp = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
+                # Add json response format if supported by provider
+                kwargs = {
+                    "model": self.model,
+                    "messages": [
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.6,
-                    max_tokens=3000
-                )
+                    "temperature": 0.7,
+                }
+                if self.provider in ["openai", "groq"]:
+                    kwargs["response_format"] = {"type": "json_object"}
+                elif self.provider in ["nvidia", "nemotron"]:
+                    kwargs["max_tokens"] = 3000
+                    kwargs["temperature"] = 0.6
+
+                resp = self.client.chat.completions.create(**kwargs)
                 content = resp.choices[0].message.content
                 return self._extract_json(content), content
             except Exception as e:
                 last_err = e
                 backoff = attempt * 3
-                print(f"[LLM Agent] NVIDIA NIM call failed (attempt {attempt}/{max_retries}: {type(e).__name__} - {e}). Retrying in {backoff}s...")
+                print(f"[LLM Agent] Provider '{self.provider}' call failed (attempt {attempt}/{max_retries}: {type(e).__name__} - {e}). Retrying in {backoff}s...", flush=True)
                 time.sleep(backoff)
-        raise RuntimeError(f"NVIDIA NIM failed after {max_retries} attempts: {last_err}")
+        raise RuntimeError(f"Provider '{self.provider}' failed after {max_retries} attempts: {last_err}")
 
-    def _call_anthropic(self, user_prompt):
-        resp = self.client.messages.create(
-            model=self.model,
-            max_tokens=1024,
-            temperature=0.7,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}]
-        )
-        content = resp.content[0].text
-        return self._extract_json(content), content
+    def _call_anthropic(self, user_prompt, max_retries=5):
+        last_err = None
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=2048,
+                    temperature=0.7,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": user_prompt}]
+                )
+                content = resp.content[0].text
+                return self._extract_json(content), content
+            except Exception as e:
+                last_err = e
+                backoff = attempt * 3
+                print(f"[LLM Agent] Anthropic call failed (attempt {attempt}/{max_retries}: {type(e).__name__} - {e}). Retrying in {backoff}s...", flush=True)
+                time.sleep(backoff)
+        raise RuntimeError(f"Anthropic failed after {max_retries} attempts: {last_err}")
 
-    def _call_openai(self, user_prompt):
-        resp = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt}
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.7
-        )
-        content = resp.choices[0].message.content
-        return self._extract_json(content), content
+    def _call_local_hf(self, user_prompt):
+        prompt = f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
+        out = self.pipe(prompt, max_new_tokens=1024, do_sample=True, temperature=0.7)
+        generated_text = out[0]["generated_text"][len(prompt):]
+        return self._extract_json(generated_text), generated_text
 
     def _call_adaptive_simulation(self, iteration_idx, history, incumbent_best_loss, base_loss, task="dyck"):
         """

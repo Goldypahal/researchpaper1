@@ -63,11 +63,22 @@ def run_comparative_experiment(
                         with open(trace_file, "r") as tf:
                             cached_res = json.load(tf)
                         if len(cached_res.get("trajectory", [])) >= max_iterations:
-                            all_trajectories[task][method].append(cached_res)
-                            auc_val = cached_res.get("auc_normalized_gain", cached_res.get("auc_search_curve", 0.0))
-                            print(f"  [Seed {s:3d}] [RESUMED FROM DISK] Base: {cached_res['baseline_val_loss']:.4f} -> Best: {cached_res['best_val_loss']:.4f} "
-                                  f"(Gain: {cached_res['improvement_pct']:+.2f}%) | OOD: {cached_res['best_ood_loss']:.4f} | AUC Gain: {auc_val:.4f}", flush=True)
-                            continue
+                            # Integrity verification: reject cached trace if it contains simulated LLM proposals
+                            is_contaminated = False
+                            if method == "llm":
+                                for step in cached_res.get("trajectory", []):
+                                    prov = step.get("provider") or step.get("proposal_metadata", {}).get("provider")
+                                    if prov == "adaptive_simulation":
+                                        is_contaminated = True
+                                        break
+                            if is_contaminated:
+                                print(f"  [Seed {s:3d}] Cached trace contains scripted simulation data. Discarding cache to enforce REAL LLM reasoning.", flush=True)
+                            else:
+                                all_trajectories[task][method].append(cached_res)
+                                auc_val = cached_res.get("auc_normalized_gain", cached_res.get("auc_search_curve", 0.0))
+                                print(f"  [Seed {s:3d}] [RESUMED FROM DISK] Base: {cached_res['baseline_val_loss']:.4f} -> Best: {cached_res['best_val_loss']:.4f} "
+                                      f"(Gain: {cached_res['improvement_pct']:+.2f}%) | OOD: {cached_res['best_ood_loss']:.4f} | AUC Gain: {auc_val:.4f}", flush=True)
+                                continue
                     except Exception as e:
                         print(f"  [Seed {s:3d}] Cache read failed ({e}), re-evaluating...", flush=True)
 

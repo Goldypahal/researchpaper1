@@ -122,7 +122,14 @@ class ComparativeSearchBenchmark:
                 population.append(sample_random_candidate(rng))
             pop_scores = [best_val] + [99.0] * (pop_size - 1)
         elif method == "llm":
-            agent = LLMResearchAgent(allow_simulation=True, strict=False, reasoning_mode=llm_mode)
+            # STRICT MODE: Real LLM reasoning required for empirical research.
+            # Simulation fallback is strictly forbidden unless explicitly enabled.
+            allow_sim = os.environ.get("ALLOW_LLM_SIMULATION", "0").lower() in ("1", "true", "yes")
+            agent = LLMResearchAgent(
+                strict=True,
+                allow_simulation=allow_sim,
+                reasoning_mode=llm_mode
+            )
 
         # Iterations 1 to K
         for it in range(1, self.max_iterations + 1):
@@ -154,6 +161,13 @@ class ComparativeSearchBenchmark:
                         base_loss=base_res["val_loss"],
                         task=self.task
                     )
+                    # Integrity assertion: reject scripted simulation in strict mode
+                    if not allow_sim and proposal.get("provider") == "adaptive_simulation":
+                        raise RuntimeError(
+                            f"FATAL INTEGRITY VIOLATION: Iteration {it} returned provider='adaptive_simulation'. "
+                            f"Real LLM reasoning is required for empirical research."
+                        )
+
                     cand_cfg = sanitize_configuration(proposal.get("modifications", {}))
                     # Fill any missing keys from baseline
                     for k, v in baseline_cfg.items():

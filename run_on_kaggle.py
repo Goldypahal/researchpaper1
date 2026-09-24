@@ -56,10 +56,39 @@ def run_kaggle_sweep(
     num_seeds=5,
     iterations=10,
     steps_per_cand=50,
-    run_ablations=True
+    run_ablations=True,
+    llm_provider=None,
+    llm_model=None,
+    api_key=None,
+    allow_simulation=False
 ):
     start_all = time.time()
     device_type = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # Preflight Check: Real LLM Connection Verification
+    if "llm" in methods:
+        print("=" * 70, flush=True)
+        print("PREFLIGHT HEALTH CHECK: REAL LLM REASONING ADAPTER", flush=True)
+        print("=" * 70, flush=True)
+        from agent_scaffold.llm_agent import LLMResearchAgent, SimulationDisallowedError
+        try:
+            test_agent = LLMResearchAgent(
+                provider=llm_provider,
+                model=llm_model,
+                api_key=api_key,
+                strict=True,
+                allow_simulation=allow_simulation
+            )
+            ok, test_resp = test_agent.verify_connection()
+            if not ok:
+                raise RuntimeError(f"LLM live verification ping failed: {test_resp}")
+            print("Status: REAL LLM CONNECTION VERIFIED.\n", flush=True)
+        except SimulationDisallowedError as e:
+            print(f"\n[FATAL EXPERIMENT HALT] {e}\n", flush=True)
+            sys.exit(1)
+        except Exception as e:
+            print(f"\n[FATAL EXPERIMENT HALT] LLM adapter failed to connect: {e}\n", flush=True)
+            sys.exit(1)
 
     # Select standardized seeds
     standard_seeds = [42, 101, 202, 303, 404, 505, 606, 707, 808, 909]
@@ -146,12 +175,24 @@ if __name__ == "__main__":
     parser.add_argument("--iterations", type=int, default=10, help="Search horizon K (iterations per arm)")
     parser.add_argument("--steps", type=int, default=50, help="Training steps per candidate")
     parser.add_argument("--no_ablations", action="store_true", help="Skip reasoning ablation suite")
+    parser.add_argument("--provider", type=str, default=None, choices=["anthropic", "openai", "gemini", "groq", "openrouter", "nvidia", "local"], help="LLM Provider")
+    parser.add_argument("--model", type=str, default=None, help="LLM model identifier")
+    parser.add_argument("--api-key", type=str, default=None, help="Explicit API key (otherwise auto-read from environment/Kaggle Secrets)")
+    parser.add_argument("--local-llm", type=str, default=None, help="HuggingFace model ID for on-GPU local inference (e.g., Qwen/Qwen2.5-3B-Instruct)")
+    parser.add_argument("--allow-simulation", action="store_true", help="Opt-in to scripted simulation (FOR TESTING ONLY, forbidden for research papers)")
     args = parser.parse_args()
+
+    if args.local_llm:
+        os.environ["LOCAL_LLM_MODEL"] = args.local_llm
 
     check_gpu_environment()
     run_kaggle_sweep(
         num_seeds=args.seeds,
         iterations=args.iterations,
         steps_per_cand=args.steps,
-        run_ablations=not args.no_ablations
+        run_ablations=not args.no_ablations,
+        llm_provider=args.provider or ("local" if args.local_llm else None),
+        llm_model=args.model or args.local_llm,
+        api_key=args.api_key,
+        allow_simulation=args.allow_simulation
     )
