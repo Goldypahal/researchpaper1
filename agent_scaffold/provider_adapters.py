@@ -31,30 +31,66 @@ class SimulationDisallowedError(RuntimeError):
     pass
 
 
-def extract_json_payload(text: str) -> Dict[str, Any]:
-    """Robust extractor for JSON objects returned by LLMs."""
-    # 1. Direct parse
-    try:
-        return json.loads(text.strip(), strict=False)
-    except Exception:
-        pass
+class LLMProposalParseError(RuntimeError):
+    """Raised when an LLM fails to produce valid JSON adhering to the experiment schema."""
+    def __init__(self, message: str, raw_text: str = "", audit_metadata: dict = None):
+        super().__init__(message)
+        self.raw_text = raw_text
+        self.audit_metadata = audit_metadata or {}
 
-    # 2. Markdown fenced code block
-    code_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+
+def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
+    """
+    Rigorously parses LLM output into JSON.
+    Tracks raw validity vs repair without pretending repaired responses were originally valid.
+
+    Returns:
+        (parsed_dict_or_None, audit_dict)
+    """
+    audit = {
+        "json_valid": False,
+        "repair_attempted": False,
+        "repair_success": False,
+        "error_msg": None,
+        "raw_response": text
+    }
+
+    if not text or not isinstance(text, str) or not text.strip():
+        audit["error_msg"] = "Empty or null text"
+        return None, audit
+
+    cleaned_text = text.strip()
+
+    # 1. Direct raw parse attempt
+    try:
+        parsed = json.loads(cleaned_text, strict=False)
+        if isinstance(parsed, dict):
+            audit["json_valid"] = True
+            return parsed, audit
+    except Exception as e:
+        raw_err = str(e)
+
+    # 2. Markdown fenced code block raw attempt
+    code_block = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned_text)
     if code_block:
+        candidate_block = code_block.group(1).strip()
         try:
-            return json.loads(code_block.group(1).strip(), strict=False)
+            parsed = json.loads(candidate_block, strict=False)
+            if isinstance(parsed, dict):
+                audit["json_valid"] = True
+                return parsed, audit
         except Exception:
             pass
 
-    # 3. Balanced braces extraction
-    start = text.find('{')
+    # 3. Direct balanced braces raw attempt
+    start = cleaned_text.find('{')
+    candidate_braces = None
     if start != -1:
         depth = 0
         in_string = False
         escape = False
-        for i in range(start, len(text)):
-            c = text[i]
+        for i in range(start, len(cleaned_text)):
+            c = cleaned_text[i]
             if escape:
                 escape = False
                 continue
@@ -70,21 +106,72 @@ def extract_json_payload(text: str) -> Dict[str, Any]:
                 elif c == '}':
                     depth -= 1
                     if depth == 0:
-                        candidate = text[start:i+1]
+                        candidate_braces = cleaned_text[start:i+1]
                         try:
-                            return json.loads(candidate, strict=False)
+                            parsed = json.loads(candidate_braces, strict=False)
+                            if isinstance(parsed, dict):
+                                audit["json_valid"] = True
+                                return parsed, audit
                         except Exception:
-                            break
+                            pass
+                        break
 
-    # 4. Fallback greedy regex
-    match = re.search(r"\{[\s\S]*\}", text)
+    # If all raw parse attempts failed, raw output is NOT valid JSON
+    audit["json_valid"] = False
+    audit["repair_attempted"] = True
+
+    # Best text candidate for repair:
+    s = candidate_braces or (code_block.group(1).strip() if code_block else None)
+    if not s and start != -1:
+        s = cleaned_text[start:]
+    if not s:
+        s = cleaned_text
+
+    # Progressive repairs:
+    try:
+        # A. Strip trailing commas before closing braces/brackets
+        s_repaired = re.sub(r',\s*([\}\]])', r'\1', s)
+        # B. Add missing commas between key-value pairs (e.g. number followed by newline and next key)
+        s_repaired = re.sub(r'([0-9"truefalsenull\]\}])\s*\n\s*"', r'\1,\n"', s_repaired)
+        # C. Replace single quotes on keys and values
+        s_repaired = re.sub(r"(?<=[{,\s])'([a-zA-Z0-9_]+)'\s*:", r'"\1":', s_repaired)
+        # D. Close truncated curly braces if unclosed due to token cutoff
+        open_braces = s_repaired.count('{')
+        close_braces = s_repaired.count('}')
+        if open_braces > close_braces:
+            if s_repaired.count('"') % 2 != 0:
+                s_repaired += '"'
+            s_repaired += '}' * (open_braces - close_braces)
+
+        parsed = json.loads(s_repaired, strict=False)
+        if isinstance(parsed, dict):
+            audit["repair_success"] = True
+            return parsed, audit
+    except Exception as e:
+        audit["error_msg"] = str(e)
+
+    # Fallback greedy regex repair
+    match = re.search(r"\{[\s\S]*\}", cleaned_text)
     if match:
         try:
-            return json.loads(match.group(0), strict=False)
-        except Exception:
-            pass
+            s_cand = re.sub(r',\s*([\}\]])', r'\1', match.group(0))
+            parsed = json.loads(s_cand, strict=False)
+            if isinstance(parsed, dict):
+                audit["repair_success"] = True
+                return parsed, audit
+        except Exception as e:
+            audit["error_msg"] = str(e)
 
-    return json.loads(text, strict=False)
+    audit["repair_success"] = False
+    return None, audit
+
+
+def extract_json_payload(text: str) -> Dict[str, Any]:
+    """Extractor for JSON objects returned by LLMs; raises JSONDecodeError if parsing fails."""
+    parsed, audit = parse_llm_json(text)
+    if parsed is not None:
+        return parsed
+    raise json.JSONDecodeError(audit.get("error_msg") or "Failed to extract valid JSON payload", text, 0)
 
 
 class BaseProviderAdapter:
@@ -396,8 +483,8 @@ class NvidiaAdapter(OpenAIBaseAdapter):
         return kwargs
 
 
-# Module-level cache for local LLM pipeline to prevent reloading weights across iterations/seeds
-_CACHED_LOCAL_PIPE = None
+# Module-level cache for local LLM model and tokenizer to prevent reloading weights across iterations/seeds
+_CACHED_LOCAL_MODEL = None
 _CACHED_LOCAL_TOKENIZER = None
 _CACHED_MODEL_ID = None
 
@@ -406,24 +493,25 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
     """
     Adapter for locally loaded HuggingFace open-weight models on GPU.
     Supports 4-bit quantization (bitsandbytes) for 7B-14B models on Kaggle Tesla T4.
-    Reuses cached pipeline in memory across iterations to avoid redundant reload delays.
+    Direct GPU tensor generation eliminates pipeline overhead and max_length conflicts.
+    Features progressive parsing, controlled deterministic retries, and comprehensive audit tracking.
     """
 
     def __init__(self, model: Optional[str] = None, quantization: Optional[str] = None):
-        global _CACHED_LOCAL_PIPE, _CACHED_LOCAL_TOKENIZER, _CACHED_MODEL_ID
+        global _CACHED_LOCAL_MODEL, _CACHED_LOCAL_TOKENIZER, _CACHED_MODEL_ID
         model_id = model or os.environ.get("LOCAL_LLM_MODEL", "Qwen/Qwen2.5-7B-Instruct")
         quant_mode = quantization or os.environ.get("LOCAL_LLM_QUANT", "4bit")
         super().__init__(model=model_id)
         self.name = "local"
         self.quant_mode = quant_mode
 
-        if _CACHED_LOCAL_PIPE is not None and _CACHED_MODEL_ID == model_id:
+        if _CACHED_LOCAL_MODEL is not None and _CACHED_MODEL_ID == model_id:
             print(f"[Adapter:local] Reusing already loaded in-memory model: {model_id}", flush=True)
-            self.pipe = _CACHED_LOCAL_PIPE
+            self.model = _CACHED_LOCAL_MODEL
             self.tokenizer = _CACHED_LOCAL_TOKENIZER
         else:
             import torch
-            from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+            from transformers import AutoModelForCausalLM, AutoTokenizer
 
             print(f"[Adapter:local] Loading HuggingFace model '{model_id}' (quantization={self.quant_mode}) ...", flush=True)
             self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
@@ -435,7 +523,7 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
                 "trust_remote_code": True
             }
 
-            # Attempt 4-bit quantization if CUDA is available and bitsandbytes is present
+            # 4-bit NF4 Quantization
             if torch.cuda.is_available() and self.quant_mode == "4bit":
                 try:
                     from transformers import BitsAndBytesConfig
@@ -448,7 +536,7 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
                     model_kwargs["quantization_config"] = bnb_config
                     print(f"[Adapter:local] Using 4-bit NF4 quantization (bitsandbytes) for efficient VRAM utilization.", flush=True)
                 except Exception as bnb_err:
-                    print(f"[Adapter:local] bitsandbytes 4-bit config unavailable ({bnb_err}). Falling back to float16.", flush=True)
+                    print(f"[Adapter:local] bitsandbytes unavailable ({bnb_err}). Falling back to float16.", flush=True)
                     model_kwargs["torch_dtype"] = torch.float16
             elif torch.cuda.is_available():
                 model_kwargs["torch_dtype"] = torch.float16
@@ -456,12 +544,15 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
                 model_kwargs["torch_dtype"] = torch.float32
 
             hf_model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
-            self.pipe = pipeline("text-generation", model=hf_model, tokenizer=self.tokenizer)
+            # Remove conflicting default max_length from generation config
+            if hasattr(hf_model, "generation_config") and hf_model.generation_config is not None:
+                hf_model.generation_config.max_length = None
 
-            _CACHED_LOCAL_PIPE = self.pipe
+            self.model = hf_model
+            _CACHED_LOCAL_MODEL = self.model
             _CACHED_LOCAL_TOKENIZER = self.tokenizer
             _CACHED_MODEL_ID = model_id
-            print(f"[Adapter:local] Model '{model_id}' loaded successfully.", flush=True)
+            print(f"[Adapter:local] Model '{model_id}' loaded successfully on device: {self.model.device}.", flush=True)
 
     def verify_connection(self) -> Tuple[bool, Any]:
         try:
@@ -478,9 +569,10 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
         system_prompt: str,
         user_prompt: str,
         temperature: float = 0.7,
-        max_tokens: int = 1024,
-        max_retries: int = 1
+        max_tokens: int = 512,  # Compact budget: proposals are ~150-250 tokens
+        max_retries: int = 2
     ) -> Tuple[Dict[str, Any], str, Dict[str, Any], float]:
+        import torch
         t0 = time.time()
 
         messages = [
@@ -488,45 +580,91 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
             {"role": "user", "content": user_prompt}
         ]
 
-        # Use tokenizer chat template if available, otherwise standard formatting
         if hasattr(self.tokenizer, "apply_chat_template"):
             try:
-                prompt = self.tokenizer.apply_chat_template(
+                base_prompt = self.tokenizer.apply_chat_template(
                     messages,
                     tokenize=False,
                     add_generation_prompt=True
                 )
             except Exception:
-                prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
+                base_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
         else:
-            prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
+            base_prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
 
-        out = self.pipe(
-            prompt,
-            max_new_tokens=max_tokens,
-            do_sample=True,
-            temperature=temperature,
-            top_p=0.9,
-            pad_token_id=self.tokenizer.pad_token_id
+        current_prompt = base_prompt
+        last_generated = ""
+        last_audit = {}
+
+        for attempt in range(1, max_retries + 1):
+            inputs = self.tokenizer(current_prompt, return_tensors="pt").to(self.model.device)
+            input_tok_len = inputs["input_ids"].shape[1]
+
+            # Use low temperature for retry pass to enforce strict deterministic syntax
+            gen_temp = temperature if attempt == 1 else 0.2
+            do_sample = (gen_temp > 0.0)
+
+            with torch.inference_mode():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_tokens,
+                    do_sample=do_sample,
+                    temperature=gen_temp if do_sample else None,
+                    top_p=0.9 if do_sample else None,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id
+                )
+
+            gen_ids = outputs[0][input_tok_len:]
+            last_generated = self.tokenizer.decode(gen_ids, skip_special_tokens=True)
+            gen_tok_len = len(gen_ids)
+
+            parsed, audit = parse_llm_json(last_generated)
+            audit["attempt"] = attempt
+            audit["retry_attempted"] = (attempt > 1)
+            audit["retry_success"] = (attempt > 1 and parsed is not None)
+            audit["prompt_tokens"] = input_tok_len
+            audit["completion_tokens"] = gen_tok_len
+            audit["total_tokens"] = input_tok_len + gen_tok_len
+            audit["latency_seconds"] = round(time.time() - t0, 3)
+            last_audit = audit
+            self._last_usage = audit
+
+            if parsed is not None and isinstance(parsed, dict) and "modifications" in parsed:
+                parsed["_parse_audit"] = audit
+                return parsed, last_generated, audit, audit["latency_seconds"]
+
+            # If attempt 1 failed to parse, trigger controlled retry
+            if attempt < max_retries:
+                err_msg = audit.get("error_msg", "syntax error")
+                print(f"[Adapter:local] Attempt {attempt} returned malformed JSON ({err_msg}). Triggering controlled retry (temp=0.2)...", flush=True)
+                retry_messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                    {"role": "assistant", "content": last_generated},
+                    {"role": "user", "content": f"CRITICAL FIX: Your output failed JSON parsing ({err_msg}). Re-write and output ONLY the raw, strictly valid JSON object conforming to the schema. No markdown fences, no explanatory text, and no trailing commas."}
+                ]
+                if hasattr(self.tokenizer, "apply_chat_template"):
+                    try:
+                        current_prompt = self.tokenizer.apply_chat_template(retry_messages, tokenize=False, add_generation_prompt=True)
+                    except Exception:
+                        current_prompt = base_prompt
+                else:
+                    current_prompt = base_prompt
+
+        # If all attempts failed, save raw output for post-mortem audit and raise structured error
+        workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        out_dir = os.path.join(workspace_root, "experiment_results", "failed_llm_proposals")
+        os.makedirs(out_dir, exist_ok=True)
+        fail_file = os.path.join(out_dir, f"failed_llm_output_{int(time.time())}.txt")
+        with open(fail_file, "w", encoding="utf-8") as ff:
+            ff.write(f"=== RAW LLM RESPONSE ===\n{last_generated}\n\n=== AUDIT METADATA ===\n{json.dumps(last_audit, indent=2)}\n")
+        print(f"[Adapter:local] Fatal: LLM failed to emit valid JSON after {max_retries} attempts. Saved raw output to: {fail_file}", flush=True)
+        raise LLMProposalParseError(
+            f"Local LLM failed to emit valid JSON after {max_retries} attempts ({last_audit.get('error_msg')}).",
+            raw_text=last_generated,
+            audit_metadata=last_audit
         )
-        generated_text = out[0]["generated_text"][len(prompt):]
-        latency = round(time.time() - t0, 3)
-
-        # Token accounting
-        try:
-            prompt_toks = len(self.tokenizer.encode(prompt))
-            gen_toks = len(self.tokenizer.encode(generated_text))
-            usage_dict = {
-                "prompt_tokens": prompt_toks,
-                "completion_tokens": gen_toks,
-                "total_tokens": prompt_toks + gen_toks
-            }
-        except Exception:
-            usage_dict = {}
-
-        self._last_usage = usage_dict
-        parsed = extract_json_payload(generated_text)
-        return parsed, generated_text, usage_dict, latency
 
 
 class AdaptiveSimulationAdapter(BaseProviderAdapter):

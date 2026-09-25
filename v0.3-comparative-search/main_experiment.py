@@ -37,7 +37,8 @@ def run_comparative_experiment(
     steps_per_candidate: int = 25,
     eval_timeout: float = 300.0,
     llm_provider: str = None,
-    llm_model: str = None
+    llm_model: str = None,
+    fresh_run: bool = True
 ):
     print("=====================================================================", flush=True)
     print("PHASE 8: MATCHED-COMPUTE COMPARATIVE SEARCH BENCHMARK", flush=True)
@@ -45,6 +46,7 @@ def run_comparative_experiment(
     print(f"Methods: {methods}", flush=True)
     print(f"Seeds: {seeds} (N={len(seeds)} replications per arm)", flush=True)
     print(f"Horizon: K={max_iterations} iterations, {steps_per_candidate} steps per candidate", flush=True)
+    print(f"Mode: {'FRESH RUN (clean un-cached trajectories)' if fresh_run else 'RESUME (caching enabled)'}", flush=True)
     if "llm" in methods:
         print(f"LLM Provider: {llm_provider}", flush=True)
         print(f"LLM Model: {llm_model}", flush=True)
@@ -63,7 +65,7 @@ def run_comparative_experiment(
             print(f"\n--> Running Search Arm: [{method.upper()}] on {task.upper()}", flush=True)
             for s in seeds:
                 trace_file = os.path.join(traces_dir, f"trace_{task}_{method}_seed_{s}.json")
-                if os.path.exists(trace_file) and os.path.getsize(trace_file) > 100:
+                if not fresh_run and os.path.exists(trace_file) and os.path.getsize(trace_file) > 100:
                     try:
                         with open(trace_file, "r") as tf:
                             cached_res = json.load(tf)
@@ -147,9 +149,10 @@ def run_comparative_experiment(
             runs = all_trajectories[task][method]
             best_vals = [r["best_val_loss"] for r in runs]
             best_oods = [r["best_ood_loss"] for r in runs]
-            gains = [r["improvement_pct"] for r in runs]
-            aucs = [r.get("auc_normalized_gain", r.get("auc_search_curve", 0.0)) for r in runs]
             gpu_times = [r["total_gpu_seconds"] for r in runs]
+            cand_gpu_times = [r.get("candidate_train_gpu_sec", r["total_gpu_seconds"]) for r in runs]
+            llm_inf_times = [r.get("llm_inference_sec", 0.0) for r in runs]
+            total_wall_times = [r.get("total_search_wall_clock_sec", r["total_gpu_seconds"]) for r in runs]
 
             task_analysis["arms"][method] = {
                 "best_val_loss": summarize_distribution(best_vals),
@@ -157,7 +160,10 @@ def run_comparative_experiment(
                 "gain_pct": summarize_distribution(gains),
                 "auc_normalized_gain": summarize_distribution(aucs),
                 "auc_search_curve": summarize_distribution(aucs),
-                "gpu_seconds": summarize_distribution(gpu_times)
+                "gpu_seconds": summarize_distribution(gpu_times),
+                "candidate_train_gpu_sec": summarize_distribution(cand_gpu_times),
+                "llm_inference_sec": summarize_distribution(llm_inf_times),
+                "total_search_wall_clock_sec": summarize_distribution(total_wall_times)
             }
 
         # Comparative tests vs Random and vs LLM
@@ -230,8 +236,8 @@ def generate_comparative_report(
         md.append(f"## Benchmark: {task.upper()}")
         md.append("")
         md.append("### 1. Performance Summary Across Search Arms")
-        md.append("| Search Arm | $L^*_{\\text{val}}$ Mean [95% CI] | $L^*_{\\text{OOD}}$ Mean [95% CI] | Gain (%) Mean | Normalized Gain AUC | Eval Wall-Clock (s) |")
-        md.append("| :--- | :--- | :--- | :--- | :--- | :--- |")
+        md.append("| Search Arm | $L^*_{\\text{val}}$ Mean [95% CI] | $L^*_{\\text{OOD}}$ Mean [95% CI] | Gain (%) Mean | Normalized Gain AUC | Cand Train GPU (s) | LLM Infer (s) | Total Wall-Clock (s) |")
+        md.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |")
 
         arms = analysis[task]["arms"]
         for m in methods:
@@ -240,12 +246,14 @@ def generate_comparative_report(
             ol = a["best_ood_loss"]
             gn = a["gain_pct"]
             auc = a["auc_search_curve"]
-            gt = a["gpu_seconds"]
+            cand_t = a.get("candidate_train_gpu_sec", a["gpu_seconds"])
+            llm_t = a.get("llm_inference_sec", {"mean": 0.0})
+            tot_t = a.get("total_search_wall_clock_sec", a["gpu_seconds"])
 
             md.append(
                 f"| **{m.upper()}** | {vl['mean']:.4f} [{vl['ci_95'][0]:.4f}, {vl['ci_95'][1]:.4f}] | "
                 f"{ol['mean']:.4f} [{ol['ci_95'][0]:.4f}, {ol['ci_95'][1]:.4f}] | "
-                f"{gn['mean']:+.2f}% | {auc['mean']:.4f} | {gt['mean']:.1f}s |"
+                f"{gn['mean']:+.2f}% | {auc['mean']:.4f} | {cand_t['mean']:.1f}s | {llm_t['mean']:.1f}s | {tot_t['mean']:.1f}s |"
             )
 
         md.append("")
@@ -289,6 +297,10 @@ if __name__ == "__main__":
     parser.add_argument("--max-iterations", type=int, default=10, help="Search horizon K")
     parser.add_argument("--steps-per-candidate", type=int, default=25, help="Evaluation steps per candidate")
     parser.add_argument("--eval-timeout", type=float, default=300.0, help="Timeout in seconds per candidate evaluation")
+    parser.add_argument("--llm-provider", type=str, default=None, help="LLM provider name")
+    parser.add_argument("--llm-model", type=str, default=None, help="LLM model name")
+    parser.add_argument("--fresh", action="store_true", default=True, help="Clean run without cached traces (default: True)")
+    parser.add_argument("--resume", dest="fresh", action="store_false", help="Resume from cached traces if present")
     args = parser.parse_args()
 
     run_comparative_experiment(
@@ -297,5 +309,8 @@ if __name__ == "__main__":
         seeds=args.seeds,
         max_iterations=args.max_iterations,
         steps_per_candidate=args.steps_per_candidate,
-        eval_timeout=args.eval_timeout
+        eval_timeout=args.eval_timeout,
+        llm_provider=args.llm_provider,
+        llm_model=args.llm_model,
+        fresh_run=args.fresh
     )

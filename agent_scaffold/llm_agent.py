@@ -281,7 +281,13 @@ Output ONLY the final verified/refined JSON matching the original schema.
         result["raw_prompt"] = user_prompt
         result["raw_response"] = raw_response_text
         result["latency_seconds"] = total_latency
-        result["token_usage"] = getattr(self, "_last_usage", {})
+        parse_audit = result.pop("_parse_audit", None) or getattr(self, "_last_usage", {})
+        result["parse_audit"] = parse_audit
+        result["token_usage"] = {
+            "prompt_tokens": parse_audit.get("prompt_tokens", 0),
+            "completion_tokens": parse_audit.get("completion_tokens", 0),
+            "total_tokens": parse_audit.get("total_tokens", 0)
+        } if parse_audit else getattr(self, "_last_usage", {})
         result["reasoning_effort"] = "medium" if self.provider == "gemini" else None
         if critic_prompt_hash:
             result["critic_prompt_hash"] = critic_prompt_hash

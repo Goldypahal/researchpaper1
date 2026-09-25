@@ -61,7 +61,8 @@ def run_kaggle_sweep(
     llm_provider=None,
     llm_model=None,
     api_key=None,
-    allow_simulation=False
+    allow_simulation=False,
+    fresh_run=True
 ):
     start_all = time.time()
     device_type = "cuda" if torch.cuda.is_available() else "cpu"
@@ -97,7 +98,8 @@ def run_kaggle_sweep(
 
     print(f"Starting Kaggle Experimental Sweep on device: {device_type.upper()}")
     print(f"Tasks: {tasks} | Methods: {methods}")
-    print(f"Seeds: {seeds} (N={len(seeds)}) | Horizon: K={iterations} | Steps: {steps_per_cand}\n")
+    print(f"Seeds: {seeds} (N={len(seeds)}) | Horizon: K={iterations} | Steps: {steps_per_cand}")
+    print(f"Execution Mode: {'FRESH RUN (clean un-cached)' if fresh_run else 'RESUME (caching enabled)'}\n")
 
     # 1. Main Comparative Search Sweep
     print(">>> STAGE 1: Matched-Compute Comparative Search Benchmark <<<")
@@ -108,7 +110,8 @@ def run_kaggle_sweep(
         max_iterations=iterations,
         steps_per_candidate=steps_per_cand,
         llm_provider=llm_provider,
-        llm_model=llm_model
+        llm_model=llm_model,
+        fresh_run=fresh_run
     )
 
     # 2. Reasoning Ablation Sweep
@@ -186,6 +189,8 @@ if __name__ == "__main__":
     parser.add_argument("--api-key", type=str, default=None, help="Explicit API key for secondary commercial backends")
     parser.add_argument("--local-llm", type=str, default=None, help="Alias for local model identifier (e.g. Qwen/Qwen2.5-7B-Instruct or Qwen/Qwen2.5-3B-Instruct)")
     parser.add_argument("--allow-simulation", action="store_true", help="Opt-in to scripted simulation (FOR TESTING ONLY, forbidden for research papers)")
+    parser.add_argument("--fresh", action="store_true", default=True, help="Clean run without loading cached traces (default: True)")
+    parser.add_argument("--resume", dest="fresh", action="store_false", help="Resume from cached traces if present")
     args = parser.parse_args()
 
     chosen_model = args.local_llm or args.model
@@ -202,5 +207,6 @@ if __name__ == "__main__":
         llm_provider=args.provider,
         llm_model=chosen_model,
         api_key=args.api_key,
-        allow_simulation=args.allow_simulation
+        allow_simulation=args.allow_simulation,
+        fresh_run=args.fresh
     )

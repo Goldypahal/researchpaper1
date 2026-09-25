@@ -107,6 +107,7 @@ class ComparativeSearchBenchmark:
         }]
         
         cum_gpu_sec = base_res["gpu_seconds"]
+        cum_llm_sec = 0.0
         best_val = base_res["val_loss"]
         best_ood = base_res["ood_loss"]
 
@@ -193,7 +194,8 @@ class ComparativeSearchBenchmark:
                         "reasoning_effort": proposal.get("reasoning_effort"),
                         "token_usage": proposal.get("token_usage", {}),
                         "latency_seconds": proposal.get("latency_seconds"),
-                        "critic_prompt_hash": proposal.get("critic_prompt_hash")
+                        "critic_prompt_hash": proposal.get("critic_prompt_hash"),
+                        "parse_audit": proposal.get("parse_audit", {})
                     }
                 except Exception as e:
                     print(f"    [Iteration {it}] FATAL LLM PROPOSAL ERROR: {type(e).__name__}: {e}")
@@ -250,7 +252,10 @@ class ComparativeSearchBenchmark:
                 best_val = val_loss
                 best_ood = ood_loss
 
-            cum_gpu_sec += eval_res["gpu_seconds"]
+            candidate_train_sec = eval_res["gpu_seconds"]
+            iter_llm_sec = float(proposal_metadata.get("latency_seconds", 0.0) or 0.0) if proposal_metadata else 0.0
+            cum_llm_sec += iter_llm_sec
+            cum_gpu_sec += candidate_train_sec
 
             h_entry = {
                 "iteration": it,
@@ -261,10 +266,13 @@ class ComparativeSearchBenchmark:
                 "val_struct_acc": eval_res["val_struct_acc"],
                 "ood_struct_acc": eval_res["ood_struct_acc"],
                 "gap_rel": eval_res["generalization_gap_rel"],
-                "eval_wall_clock_sec": eval_res["gpu_seconds"],
-                "gpu_seconds": eval_res["gpu_seconds"],
-                "cumulative_wall_clock_sec": round(cum_gpu_sec, 3),
+                "candidate_train_gpu_sec": candidate_train_sec,
+                "llm_inference_sec": iter_llm_sec,
+                "eval_wall_clock_sec": candidate_train_sec,
+                "gpu_seconds": candidate_train_sec,
+                "cumulative_wall_clock_sec": round(cum_gpu_sec + cum_llm_sec, 3),
                 "cumulative_gpu_sec": round(cum_gpu_sec, 3),
+                "cumulative_llm_sec": round(cum_llm_sec, 3),
                 "best_val_loss": best_val,
                 "hypothesis": hypo_text,
                 "predicted_delta_loss": pred_delta,
@@ -329,6 +337,9 @@ class ComparativeSearchBenchmark:
             "best_val_loss": best_val,
             "best_ood_loss": best_ood,
             "improvement_pct": round(((base_res["val_loss"] - best_val) / base_res["val_loss"]) * 100.0, 2),
+            "candidate_train_gpu_sec": round(cum_gpu_sec, 3),
+            "llm_inference_sec": round(cum_llm_sec, 3),
+            "total_search_wall_clock_sec": round(cum_gpu_sec + cum_llm_sec, 3),
             "total_eval_wall_clock_sec": round(cum_gpu_sec, 3),
             "total_gpu_seconds": round(cum_gpu_sec, 3),
             "auc_normalized_gain": auc_gain,
