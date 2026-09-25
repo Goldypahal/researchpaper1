@@ -27,6 +27,7 @@ def main():
         "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY"),
         "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"),
         "GROQ_API_KEY": os.environ.get("GROQ_API_KEY"),
+        "MISTRAL_API_KEY": os.environ.get("MISTRAL_API_KEY"),
         "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY"),
         "NVIDIA_API_KEY": os.environ.get("NVIDIA_API_KEY"),
         "LOCAL_LLM_MODEL": os.environ.get("LOCAL_LLM_MODEL")

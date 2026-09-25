@@ -177,7 +177,7 @@ if __name__ == "__main__":
     parser.add_argument("--iterations", type=int, default=10, help="Search horizon K (iterations per arm)")
     parser.add_argument("--steps", type=int, default=50, help="Training steps per candidate")
     parser.add_argument("--no_ablations", action="store_true", help="Skip reasoning ablation suite")
-    parser.add_argument("--provider", type=str, default=None, choices=["anthropic", "openai", "gemini", "groq", "openrouter", "nvidia", "local"], help="LLM Provider")
+    parser.add_argument("--provider", type=str, default=None, choices=["anthropic", "openai", "gemini", "groq", "mistral", "openrouter", "nvidia", "local"], help="LLM Provider")
     parser.add_argument("--model", type=str, default=None, help="LLM model identifier")
     parser.add_argument("--api-key", type=str, default=None, help="Explicit API key (otherwise auto-read from environment/Kaggle Secrets)")
     parser.add_argument("--local-llm", type=str, default=None, help="HuggingFace model ID for on-GPU local inference (e.g., Qwen/Qwen2.5-3B-Instruct)")

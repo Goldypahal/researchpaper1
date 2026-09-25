@@ -86,3 +86,57 @@ def get_default_baseline() -> Dict[str, Any]:
     """Returns the standardized step-0 baseline architecture."""
     base = {k: v["default"] for k, v in SEARCH_SPACE_SPEC.items()}
     return sanitize_configuration(base)
+
+
+def validate_proposal(proposal: Dict[str, Any]) -> tuple:
+    """
+    Validates an LLM research proposal against schema and search space constraints.
+    Returns:
+        (is_valid: bool, violations: list[str])
+    """
+    violations = []
+    if not isinstance(proposal, dict):
+        return False, ["Proposal is not a dictionary"]
+
+    # Check required top-level keys
+    hypo = proposal.get("hypothesis") or proposal.get("hypothesis_text")
+    if not hypo or not isinstance(hypo, str) or len(hypo.strip()) < 5:
+        violations.append("Missing or trivial hypothesis text (min 5 chars required)")
+
+    if "target_component" not in proposal:
+        violations.append("Missing 'target_component'")
+
+    pred_delta = proposal.get("predicted_delta_loss")
+    if pred_delta is None or not isinstance(pred_delta, (int, float)):
+        violations.append("Missing or non-numeric 'predicted_delta_loss'")
+
+    mods = proposal.get("modifications")
+    if not isinstance(mods, dict) or len(mods) == 0:
+        violations.append("Missing or empty 'modifications' dictionary")
+        return False, violations
+
+    # Validate individual hyperparameter modifications
+    if "lr" in mods:
+        lr = mods["lr"]
+        if not isinstance(lr, (int, float)) or not (SEARCH_SPACE_SPEC["lr"]["low"] * 0.5 <= lr <= SEARCH_SPACE_SPEC["lr"]["high"] * 1.5):
+            violations.append(f"Learning rate lr={lr} out of bounds [{SEARCH_SPACE_SPEC['lr']['low']}, {SEARCH_SPACE_SPEC['lr']['high']}]")
+
+    if "weight_decay" in mods:
+        wd = mods["weight_decay"]
+        if not isinstance(wd, (int, float)) or not (SEARCH_SPACE_SPEC["weight_decay"]["low"] <= wd <= SEARCH_SPACE_SPEC["weight_decay"]["high"] * 1.5):
+            violations.append(f"Weight decay={wd} out of bounds")
+
+    d_model = mods.get("d_model", 256)
+    n_heads = mods.get("n_heads", 4)
+    if isinstance(d_model, int) and isinstance(n_heads, int):
+        if n_heads > 0 and d_model % n_heads != 0:
+            violations.append(f"Structural violation: d_model ({d_model}) must be divisible by n_heads ({n_heads})")
+
+    for cat_key in ["activation", "norm_type", "pos_encoding", "ffn_type", "topology"]:
+        if cat_key in mods:
+            val = mods[cat_key]
+            if val is not None and val not in SEARCH_SPACE_SPEC[cat_key]["choices"]:
+                violations.append(f"Invalid {cat_key}='{val}', expected one of {SEARCH_SPACE_SPEC[cat_key]['choices']}")
+
+    return (len(violations) == 0, violations)
+

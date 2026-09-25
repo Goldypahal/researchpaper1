@@ -11,6 +11,10 @@ This guide explains how to offload all heavy model training, comparative search 
 2. In the right-hand **Notebook Settings** panel:
    - **Accelerator**: Select **GPU T4 x2** or **GPU P100** (Free 30h/week).
    - **Internet**: Toggle to **Internet on** (required to clone the repo and install packages).
+3. Under the top menu bar, click **"Add-ons"** -> **"Secrets"**:
+   - Add `NVIDIA_API_KEY`, `GROQ_API_KEY`, and/or `MISTRAL_API_KEY` (also supports `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
+   - *(Note: Gemini's free tier is restricted to ~20 requests/day, making it unsuitable for multi-seed sweeps. NVIDIA Nemotron, Groq GPT-OSS, and Mistral are prioritized).*
+   - The test script will auto-detect and authenticate without exposing your keys in code!
 
 ---
 
@@ -40,16 +44,38 @@ else:
 
 #### Cell 3: Install Required Dependencies
 ```python
-!pip install -q optuna scipy matplotlib
+!pip install -q optuna scipy matplotlib openai anthropic
 ```
 
-#### Cell 4: Launch the Full Matched-Compute GPU Sweep
+#### Cell 4: LLM Qualification & Pre-Flight Benchmark (Smoke Test)
+Before committing to an expensive multi-seed sweep, qualify the triad of reasoning candidates under the exact same Dyck-4 sequence modeling prompt:
+```
+                LLM qualification
+                          │
+          ┌───────────────┼────────────────┐
+          ↓               ↓                ↓
+       NVIDIA            Groq            Mistral
+       Nemotron          GPT-OSS         candidate
+          │                │
+       Super/Ultra       20B/120B
+```
+
 ```python
-# Evaluates Random vs TPE vs GA vs LLM Agent across Dyck-4 & Hidden FSM on GPU
-!python run_on_kaggle.py --seeds 5 --iterations 10 --steps 50
+# Evaluates NVIDIA Nemotron -> Groq GPT-OSS -> Mistral Candidate across 3 identical calls:
+!python benchmark_providers.py --calls 3
 ```
+*(To test specific models: `!python benchmark_providers.py --nvidia-model nvidia/llama-3.1-nemotron-70b-instruct --groq-model openai/gpt-oss-120b --mistral-model mistral-small-latest`)*
 
-#### Cell 5: Save & Download Results
+#### Cell 5: Launch the Full Matched-Compute GPU Sweep
+Choose your qualified provider and model as a **frozen experimental variable** across all seeds:
+```python
+# Frozen variable: all seeds [42, 101, 202, 303, 404] evaluated with the exact same chosen provider/model:
+!python run_on_kaggle.py --seeds 5 --iterations 10 --steps 50 --provider nvidia --model nvidia/llama-3.1-nemotron-70b-instruct
+```
+*(Or for Groq: `--provider groq --model openai/gpt-oss-120b`; or for Mistral: `--provider mistral --model mistral-small-latest`)*
+*(To study provider dependence, run separate distinct conditions: `--provider groq`, `--provider mistral`, `--provider gemini`)*
+
+#### Cell 6: Save & Download Results
 ```python
 !cp kaggle_experiment_results.zip /kaggle/working/
 print("Complete! Download 'kaggle_experiment_results.zip' from the right-hand Output panel.")
