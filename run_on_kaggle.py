@@ -191,6 +191,7 @@ if __name__ == "__main__":
     parser.add_argument("--allow-simulation", action="store_true", help="Opt-in to scripted simulation (FOR TESTING ONLY, forbidden for research papers)")
     parser.add_argument("--fresh", action="store_true", default=True, help="Clean run without loading cached traces (default: True)")
     parser.add_argument("--resume", dest="fresh", action="store_false", help="Resume from cached traces if present")
+    parser.add_argument("--stress-test", action="store_true", help="Run 10-proposal stress test only without full benchmark")
     args = parser.parse_args()
 
     chosen_model = args.local_llm or args.model
@@ -199,6 +200,17 @@ if __name__ == "__main__":
         os.environ["LOCAL_LLM_QUANT"] = args.quantization
 
     check_gpu_environment()
+
+    if args.stress_test:
+        from test_local_llm_proposals import run_proposal_stress_test
+        run_proposal_stress_test(
+            num_proposals=args.iterations,
+            provider=args.provider,
+            model=chosen_model,
+            quantization=args.quantization
+        )
+        sys.exit(0)
+
     run_kaggle_sweep(
         num_seeds=args.seeds,
         iterations=args.iterations,

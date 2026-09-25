@@ -569,7 +569,7 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
         system_prompt: str,
         user_prompt: str,
         temperature: float = 0.7,
-        max_tokens: int = 512,  # Compact budget: proposals are ~150-250 tokens
+        max_tokens: int = 768,  # Generous budget for detailed hypothesis + architectural modifications
         max_retries: int = 2
     ) -> Tuple[Dict[str, Any], str, Dict[str, Any], float]:
         import torch
@@ -611,7 +611,7 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
                     do_sample=do_sample,
                     temperature=gen_temp if do_sample else None,
                     top_p=0.9 if do_sample else None,
-                    pad_token_id=self.tokenizer.pad_token_id,
+                    pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
                     eos_token_id=self.tokenizer.eos_token_id
                 )
 
@@ -627,10 +627,12 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
             audit["completion_tokens"] = gen_tok_len
             audit["total_tokens"] = input_tok_len + gen_tok_len
             audit["latency_seconds"] = round(time.time() - t0, 3)
+            audit["prompt"] = current_prompt
+            audit["raw_output"] = last_generated
             last_audit = audit
             self._last_usage = audit
 
-            if parsed is not None and isinstance(parsed, dict) and "modifications" in parsed:
+            if parsed is not None and isinstance(parsed, dict):
                 parsed["_parse_audit"] = audit
                 return parsed, last_generated, audit, audit["latency_seconds"]
 
