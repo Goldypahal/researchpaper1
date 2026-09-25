@@ -188,9 +188,9 @@ class ComparativeSearchBenchmark:
                     proposal_metadata = {
                         "prompt_hash": prompt_hash,
                         "raw_response": raw_response,
-                        "provider": proposal.get("provider"),
-                        "model": proposal.get("model"),
-                        "reasoning_mode": proposal.get("reasoning_mode"),
+                        "provider": str(proposal.get("provider", "unknown")),
+                        "model": str(proposal.get("model", self.llm_model or "local")),
+                        "reasoning_mode": str(proposal.get("reasoning_mode", "full")),
                         "reasoning_effort": proposal.get("reasoning_effort"),
                         "token_usage": proposal.get("token_usage", {}),
                         "latency_seconds": proposal.get("latency_seconds"),
@@ -327,7 +327,7 @@ class ComparativeSearchBenchmark:
                 }
                 if "proposal_metadata" in entry:
                     row["proposal_metadata"] = entry["proposal_metadata"]
-                jf.write(json.dumps(row) + "\n")
+                jf.write(json.dumps(row, default=str) + "\n")
 
         return {
             "method": method,

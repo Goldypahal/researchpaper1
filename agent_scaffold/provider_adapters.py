@@ -502,12 +502,14 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
         model_id = model or os.environ.get("LOCAL_LLM_MODEL", "Qwen/Qwen2.5-7B-Instruct")
         quant_mode = quantization or os.environ.get("LOCAL_LLM_QUANT", "4bit")
         super().__init__(model=model_id)
+        self.model_id = model_id
+        self.model = model_id  # Public string identifier for logging, serialization, and experiment registry
         self.name = "local"
         self.quant_mode = quant_mode
 
         if _CACHED_LOCAL_MODEL is not None and _CACHED_MODEL_ID == model_id:
             print(f"[Adapter:local] Reusing already loaded in-memory model: {model_id}", flush=True)
-            self.model = _CACHED_LOCAL_MODEL
+            self.hf_model = _CACHED_LOCAL_MODEL
             self.tokenizer = _CACHED_LOCAL_TOKENIZER
         else:
             import torch
@@ -548,11 +550,11 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
             if hasattr(hf_model, "generation_config") and hf_model.generation_config is not None:
                 hf_model.generation_config.max_length = None
 
-            self.model = hf_model
-            _CACHED_LOCAL_MODEL = self.model
+            self.hf_model = hf_model
+            _CACHED_LOCAL_MODEL = self.hf_model
             _CACHED_LOCAL_TOKENIZER = self.tokenizer
             _CACHED_MODEL_ID = model_id
-            print(f"[Adapter:local] Model '{model_id}' loaded successfully on device: {self.model.device}.", flush=True)
+            print(f"[Adapter:local] Model '{model_id}' loaded successfully on device: {self.hf_model.device}.", flush=True)
 
     def verify_connection(self) -> Tuple[bool, Any]:
         try:
@@ -597,7 +599,7 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
         last_audit = {}
 
         for attempt in range(1, max_retries + 1):
-            inputs = self.tokenizer(current_prompt, return_tensors="pt").to(self.model.device)
+            inputs = self.tokenizer(current_prompt, return_tensors="pt").to(self.hf_model.device)
             input_tok_len = inputs["input_ids"].shape[1]
 
             # Use low temperature for retry pass to enforce strict deterministic syntax
@@ -605,7 +607,7 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
             do_sample = (gen_temp > 0.0)
 
             with torch.inference_mode():
-                outputs = self.model.generate(
+                outputs = self.hf_model.generate(
                     **inputs,
                     max_new_tokens=max_tokens,
                     do_sample=do_sample,

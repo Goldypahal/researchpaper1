@@ -128,7 +128,7 @@ class LLMSearchAgent:
 
         # Freeze provider + model as immutable experimental variables
         self.provider = self.adapter.name
-        self.model = self.adapter.model
+        self.model = getattr(self.adapter, "model_id", None) or str(self.adapter.model)
         self._last_usage = {}
 
         print(f"[LLMSearchAgent] Initialized with FROZEN variable: provider='{self.provider}', model='{self.model}', reasoning_mode='{self.reasoning_mode}'", flush=True)

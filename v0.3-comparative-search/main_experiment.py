@@ -106,7 +106,7 @@ def run_comparative_experiment(
 
                 # Save individual trajectory
                 with open(trace_file, "w") as f:
-                    json.dump(res, f, indent=2)
+                    json.dump(res, f, indent=2, default=str)
 
                 auc_val = res.get("auc_normalized_gain", res.get("auc_search_curve", 0.0))
                 print(f"  [Seed {s:3d}] Base: {res['baseline_val_loss']:.4f} -> Best: {res['best_val_loss']:.4f} "
@@ -189,7 +189,7 @@ def run_comparative_experiment(
     # Save summary JSON
     results_path = os.path.join(out_dir, "comparative_search_results.json")
     with open(results_path, "w") as f:
-        json.dump(analysis_results, f, indent=2)
+        json.dump(analysis_results, f, indent=2, default=str)
     print(f"\n[Saved Statistical Results] -> {results_path}")
 
     # Generate Markdown Report
@@ -206,7 +206,7 @@ def run_comparative_experiment(
             reg = json.load(f)
         reg["experiments"].extend(registry_entries)
         with open(reg_path, "w") as f:
-            json.dump(reg, f, indent=2)
+            json.dump(reg, f, indent=2, default=str)
         print(f"[Updated Registry] -> {len(registry_entries)} comparative runs logged in {reg_path}")
 
     return analysis_results
