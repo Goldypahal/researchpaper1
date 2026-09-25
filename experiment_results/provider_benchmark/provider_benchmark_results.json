@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-09-25 10:29:59",
+  "target_providers": [
+    "nvidia",
+    "groq",
+    "mistral"
+  ],
+  "calls_per_provider": 1,
+  "results": [
+    {
+      "provider": "nvidia",
+      "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+      "status": "MISSING_CREDENTIALS",
+      "successful_calls": 0,
+      "total_calls": 1,
+      "failure_rate_pct": 100.0,
+      "latencies": [],
+      "mean_latency": null,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "json_valid_count": 0,
+      "json_validity_pct": 0.0,
+      "proposal_valid_count": 0,
+      "proposal_validity_pct": 0.0,
+      "rate_limit_hits": 0,
+      "reasoning_scores": [],
+      "mean_reasoning_score": 0.0,
+      "usefulness_scores": [],
+      "mean_usefulness_score": 0.0,
+      "proposals": [],
+      "errors": [
+        "API key or environment variable not found."
+      ]
+    },
+    {
+      "provider": "groq",
+      "model": "openai/gpt-oss-120b",
+      "status": "MISSING_CREDENTIALS",
+      "successful_calls": 0,
+      "total_calls": 1,
+      "failure_rate_pct": 100.0,
+      "latencies": [],
+      "mean_latency": null,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "json_valid_count": 0,
+      "json_validity_pct": 0.0,
+      "proposal_valid_count": 0,
+      "proposal_validity_pct": 0.0,
+      "rate_limit_hits": 0,
+      "reasoning_scores": [],
+      "mean_reasoning_score": 0.0,
+      "usefulness_scores": [],
+      "mean_usefulness_score": 0.0,
+      "proposals": [],
+      "errors": [
+        "API key or environment variable not found."
+      ]
+    },
+    {
+      "provider": "mistral",
+      "model": "mistral-small-latest",
+      "status": "MISSING_CREDENTIALS",
+      "successful_calls": 0,
+      "total_calls": 1,
+      "failure_rate_pct": 100.0,
+      "latencies": [],
+      "mean_latency": null,
+      "output_tokens": 0,
+      "total_tokens": 0,
+      "json_valid_count": 0,
+      "json_validity_pct": 0.0,
+      "proposal_valid_count": 0,
+      "proposal_validity_pct": 0.0,
+      "rate_limit_hits": 0,
+      "reasoning_scores": [],
+      "mean_reasoning_score": 0.0,
+      "usefulness_scores": [],
+      "mean_usefulness_score": 0.0,
+      "proposals": [],
+      "errors": [
+        "API key or environment variable not found."
+      ]
+    }
+  ]
+}

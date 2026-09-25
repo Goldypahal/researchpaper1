@@ -10,6 +10,7 @@ Usage in Kaggle Notebook (with GPU accelerator enabled):
 """
 
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import sys
 import time
 import json
@@ -118,7 +119,9 @@ def run_kaggle_sweep(
             modes=["no_history", "history_no_reflection", "full", "critic_refine"],
             seeds=seeds[:min(3, len(seeds))],
             max_iterations=min(6, iterations),
-            steps_per_candidate=steps_per_cand
+            steps_per_candidate=steps_per_cand,
+            llm_provider=llm_provider,
+            llm_model=llm_model
         )
 
     # 3. Packaging Results
@@ -177,15 +180,18 @@ if __name__ == "__main__":
     parser.add_argument("--iterations", type=int, default=10, help="Search horizon K (iterations per arm)")
     parser.add_argument("--steps", type=int, default=50, help="Training steps per candidate")
     parser.add_argument("--no_ablations", action="store_true", help="Skip reasoning ablation suite")
-    parser.add_argument("--provider", type=str, default=None, choices=["anthropic", "openai", "gemini", "groq", "mistral", "openrouter", "nvidia", "local"], help="LLM Provider")
-    parser.add_argument("--model", type=str, default=None, help="LLM model identifier")
-    parser.add_argument("--api-key", type=str, default=None, help="Explicit API key (otherwise auto-read from environment/Kaggle Secrets)")
-    parser.add_argument("--local-llm", type=str, default=None, help="HuggingFace model ID for on-GPU local inference (e.g., Qwen/Qwen2.5-3B-Instruct)")
+    parser.add_argument("--provider", type=str, default="local", choices=["local", "nvidia", "groq", "mistral", "gemini", "openai", "anthropic", "openrouter"], help="LLM reasoning backend (default: local open-weight model)")
+    parser.add_argument("--model", type=str, default="Qwen/Qwen2.5-7B-Instruct", help="LLM model identifier (default: Qwen/Qwen2.5-7B-Instruct)")
+    parser.add_argument("--quantization", type=str, default="4bit", choices=["4bit", "8bit", "none"], help="Quantization precision for local model on GPU (default: 4bit)")
+    parser.add_argument("--api-key", type=str, default=None, help="Explicit API key for secondary commercial backends")
+    parser.add_argument("--local-llm", type=str, default=None, help="Alias for local model identifier (e.g. Qwen/Qwen2.5-7B-Instruct or Qwen/Qwen2.5-3B-Instruct)")
     parser.add_argument("--allow-simulation", action="store_true", help="Opt-in to scripted simulation (FOR TESTING ONLY, forbidden for research papers)")
     args = parser.parse_args()
 
-    if args.local_llm:
-        os.environ["LOCAL_LLM_MODEL"] = args.local_llm
+    chosen_model = args.local_llm or args.model
+    if args.provider == "local" or args.local_llm:
+        os.environ["LOCAL_LLM_MODEL"] = chosen_model
+        os.environ["LOCAL_LLM_QUANT"] = args.quantization
 
     check_gpu_environment()
     run_kaggle_sweep(
@@ -193,8 +199,8 @@ if __name__ == "__main__":
         iterations=args.iterations,
         steps_per_cand=args.steps,
         run_ablations=not args.no_ablations,
-        llm_provider=args.provider or ("local" if args.local_llm else None),
-        llm_model=args.model or args.local_llm,
+        llm_provider=args.provider,
+        llm_model=chosen_model,
         api_key=args.api_key,
         allow_simulation=args.allow_simulation
     )

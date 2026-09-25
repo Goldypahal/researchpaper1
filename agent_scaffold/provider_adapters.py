@@ -396,25 +396,72 @@ class NvidiaAdapter(OpenAIBaseAdapter):
         return kwargs
 
 
-class LocalHuggingFaceAdapter(BaseProviderAdapter):
-    """Adapter for locally loaded HuggingFace open-weight models on GPU."""
+# Module-level cache for local LLM pipeline to prevent reloading weights across iterations/seeds
+_CACHED_LOCAL_PIPE = None
+_CACHED_LOCAL_TOKENIZER = None
+_CACHED_MODEL_ID = None
 
-    def __init__(self, model: Optional[str] = None):
-        model_id = model or os.environ.get("LOCAL_LLM_MODEL", "Qwen/Qwen2.5-3B-Instruct")
+
+class LocalHuggingFaceAdapter(BaseProviderAdapter):
+    """
+    Adapter for locally loaded HuggingFace open-weight models on GPU.
+    Supports 4-bit quantization (bitsandbytes) for 7B-14B models on Kaggle Tesla T4.
+    Reuses cached pipeline in memory across iterations to avoid redundant reload delays.
+    """
+
+    def __init__(self, model: Optional[str] = None, quantization: Optional[str] = None):
+        global _CACHED_LOCAL_PIPE, _CACHED_LOCAL_TOKENIZER, _CACHED_MODEL_ID
+        model_id = model or os.environ.get("LOCAL_LLM_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+        quant_mode = quantization or os.environ.get("LOCAL_LLM_QUANT", "4bit")
         super().__init__(model=model_id)
         self.name = "local"
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-        print(f"[Adapter:local] Loading HuggingFace model: {model_id} ...", flush=True)
-        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-        hf_model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto",
-            trust_remote_code=True
-        )
-        self.pipe = pipeline("text-generation", model=hf_model, tokenizer=tokenizer)
-        print(f"[Adapter:local] Model {model_id} loaded on {hf_model.device}.", flush=True)
+        self.quant_mode = quant_mode
+
+        if _CACHED_LOCAL_PIPE is not None and _CACHED_MODEL_ID == model_id:
+            print(f"[Adapter:local] Reusing already loaded in-memory model: {model_id}", flush=True)
+            self.pipe = _CACHED_LOCAL_PIPE
+            self.tokenizer = _CACHED_LOCAL_TOKENIZER
+        else:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+
+            print(f"[Adapter:local] Loading HuggingFace model '{model_id}' (quantization={self.quant_mode}) ...", flush=True)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+            if self.tokenizer.pad_token_id is None:
+                self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
+            model_kwargs = {
+                "device_map": "auto",
+                "trust_remote_code": True
+            }
+
+            # Attempt 4-bit quantization if CUDA is available and bitsandbytes is present
+            if torch.cuda.is_available() and self.quant_mode == "4bit":
+                try:
+                    from transformers import BitsAndBytesConfig
+                    bnb_config = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_quant_type="nf4",
+                        bnb_4bit_use_double_quant=True,
+                        bnb_4bit_compute_dtype=torch.float16
+                    )
+                    model_kwargs["quantization_config"] = bnb_config
+                    print(f"[Adapter:local] Using 4-bit NF4 quantization (bitsandbytes) for efficient VRAM utilization.", flush=True)
+                except Exception as bnb_err:
+                    print(f"[Adapter:local] bitsandbytes 4-bit config unavailable ({bnb_err}). Falling back to float16.", flush=True)
+                    model_kwargs["torch_dtype"] = torch.float16
+            elif torch.cuda.is_available():
+                model_kwargs["torch_dtype"] = torch.float16
+            else:
+                model_kwargs["torch_dtype"] = torch.float32
+
+            hf_model = AutoModelForCausalLM.from_pretrained(model_id, **model_kwargs)
+            self.pipe = pipeline("text-generation", model=hf_model, tokenizer=self.tokenizer)
+
+            _CACHED_LOCAL_PIPE = self.pipe
+            _CACHED_LOCAL_TOKENIZER = self.tokenizer
+            _CACHED_MODEL_ID = model_id
+            print(f"[Adapter:local] Model '{model_id}' loaded successfully.", flush=True)
 
     def verify_connection(self) -> Tuple[bool, Any]:
         try:
@@ -435,12 +482,51 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
         max_retries: int = 1
     ) -> Tuple[Dict[str, Any], str, Dict[str, Any], float]:
         t0 = time.time()
-        prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
-        out = self.pipe(prompt, max_new_tokens=max_tokens, do_sample=True, temperature=temperature)
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        # Use tokenizer chat template if available, otherwise standard formatting
+        if hasattr(self.tokenizer, "apply_chat_template"):
+            try:
+                prompt = self.tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True
+                )
+            except Exception:
+                prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
+        else:
+            prompt = f"<|im_start|>system\n{system_prompt}<|im_end|>\n<|im_start|>user\n{user_prompt}<|im_end|>\n<|im_start|>assistant\n"
+
+        out = self.pipe(
+            prompt,
+            max_new_tokens=max_tokens,
+            do_sample=True,
+            temperature=temperature,
+            top_p=0.9,
+            pad_token_id=self.tokenizer.pad_token_id
+        )
         generated_text = out[0]["generated_text"][len(prompt):]
         latency = round(time.time() - t0, 3)
+
+        # Token accounting
+        try:
+            prompt_toks = len(self.tokenizer.encode(prompt))
+            gen_toks = len(self.tokenizer.encode(generated_text))
+            usage_dict = {
+                "prompt_tokens": prompt_toks,
+                "completion_tokens": gen_toks,
+                "total_tokens": prompt_toks + gen_toks
+            }
+        except Exception:
+            usage_dict = {}
+
+        self._last_usage = usage_dict
         parsed = extract_json_payload(generated_text)
-        return parsed, generated_text, {}, latency
+        return parsed, generated_text, usage_dict, latency
 
 
 class AdaptiveSimulationAdapter(BaseProviderAdapter):
@@ -521,12 +607,16 @@ def create_provider_adapter(
 
     # Detect provider if not specified
     if not provider:
-        if api_key and str(api_key).startswith("gsk_"):
+        if os.environ.get("LOCAL_LLM_MODEL"):
+            provider = "local"
+        elif api_key and str(api_key).startswith("gsk_"):
             provider = "groq"
         elif api_key and str(api_key).startswith("nvapi-"):
             provider = "nvidia"
         elif os.environ.get("GROQ_API_KEY"):
             provider = "groq"
+        elif os.environ.get("NVIDIA_API_KEY"):
+            provider = "nvidia"
         elif os.environ.get("MISTRAL_API_KEY"):
             provider = "mistral"
         elif os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"):
@@ -537,10 +627,15 @@ def create_provider_adapter(
             provider = "openai"
         elif os.environ.get("ANTHROPIC_API_KEY"):
             provider = "anthropic"
-        elif os.environ.get("LOCAL_LLM_MODEL"):
-            provider = "local"
         else:
-            provider = "adaptive_simulation"
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    provider = "local"
+                else:
+                    provider = "adaptive_simulation"
+            except Exception:
+                provider = "adaptive_simulation"
 
     provider = provider.lower()
 

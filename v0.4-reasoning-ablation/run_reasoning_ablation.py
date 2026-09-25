@@ -29,7 +29,7 @@ import sys
 import time
 import json
 import argparse
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "v0.3-comparative-search")))
@@ -45,13 +45,16 @@ def run_reasoning_ablation_suite(
     modes: List[str] = ["no_history", "history_no_reflection", "full", "critic_refine"],
     seeds: List[int] = [42, 101],
     max_iterations: int = 5,
-    steps_per_candidate: int = 50
+    steps_per_candidate: int = 50,
+    llm_provider: Optional[str] = None,
+    llm_model: Optional[str] = None
 ):
     print("=====================================================================")
     print("PHASE 11: LLM REASONING ABLATION SUITE")
     print(f"Task: {task.upper()}")
     print(f"Ablation Modes: {modes}")
     print(f"Seeds: {seeds} | Horizon: K={max_iterations} | Steps: {steps_per_candidate}")
+    print(f"LLM Provider: {llm_provider or 'default'} | Model: {llm_model or 'default'}")
     print("=====================================================================\n")
 
     out_dir = os.path.dirname(__file__)
@@ -69,7 +72,9 @@ def run_reasoning_ablation_suite(
                 task=task,
                 seed=s,
                 max_iterations=max_iterations,
-                steps_per_candidate=steps_per_candidate
+                steps_per_candidate=steps_per_candidate,
+                llm_provider=llm_provider,
+                llm_model=llm_model
             )
             res = bench.run_trajectory(method="llm", llm_mode=mode)
             elapsed = time.time() - t0
