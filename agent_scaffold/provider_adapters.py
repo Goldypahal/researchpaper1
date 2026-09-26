@@ -127,21 +127,32 @@ def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]
     if not s:
         s = cleaned_text
 
-    # Progressive repairs:
+    # Progressive deterministic repairs:
     try:
-        # A. Strip trailing commas before closing braces/brackets
-        s_repaired = re.sub(r',\s*([\}\]])', r'\1', s)
-        # B. Add missing commas between key-value pairs (e.g. number followed by newline and next key)
-        s_repaired = re.sub(r'([0-9"truefalsenull\]\}])\s*\n\s*"', r'\1,\n"', s_repaired)
-        # C. Replace single quotes on keys and values
+        # A. Strip any remaining markdown code block markers
+        s_repaired = re.sub(r"```(?:json)?", "", s).strip()
+
+        # B. Normalize Python literals to JSON
+        s_repaired = re.sub(r':\s*None\b', ': null', s_repaired)
+        s_repaired = re.sub(r':\s*True\b', ': true', s_repaired)
+        s_repaired = re.sub(r':\s*False\b', ': false', s_repaired)
+
+        # C. Strip trailing commas before closing braces/brackets
+        s_repaired = re.sub(r',\s*([\}\]])', r'\1', s_repaired)
+
+        # D. Add missing commas between key-value pairs across newlines
+        s_repaired = re.sub(r'([0-9"truefalsenull\]\}])\s*\n\s*"([a-zA-Z0-9_]+)"\s*:', r'\1,\n"\2":', s_repaired)
+
+        # E. Replace single quotes on keys and simple string values
         s_repaired = re.sub(r"(?<=[{,\s])'([a-zA-Z0-9_]+)'\s*:", r'"\1":', s_repaired)
-        # D. Close truncated curly braces if unclosed due to token cutoff
+
+        # F. Close truncated curly braces if unclosed due to token cutoff
         open_braces = s_repaired.count('{')
         close_braces = s_repaired.count('}')
         if open_braces > close_braces:
             if s_repaired.count('"') % 2 != 0:
                 s_repaired += '"'
-            s_repaired += '}' * (open_braces - close_braces)
+            s_repaired += '\n' + '}\n' * (open_braces - close_braces)
 
         parsed = json.loads(s_repaired, strict=False)
         if isinstance(parsed, dict):
@@ -150,11 +161,36 @@ def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]
     except Exception as e:
         audit["error_msg"] = str(e)
 
+    # G. Character-level repair for unescaped double quotes inside free-form text fields (e.g. "reasoning": "using "swiglu"...")
+    try:
+        for _ in range(6):
+            try:
+                parsed = json.loads(s_repaired, strict=False)
+                if isinstance(parsed, dict):
+                    audit["repair_success"] = True
+                    return parsed, audit
+            except json.JSONDecodeError as jde:
+                audit["error_msg"] = str(jde)
+                if "delimiter" in str(jde).lower() or "char" in str(jde).lower():
+                    pos = jde.pos
+                    # Find the nearest preceding double quote before pos
+                    prev_quote = s_repaired.rfind('"', 0, pos)
+                    if prev_quote > 0:
+                        prefix = s_repaired[:prev_quote].rstrip()
+                        # If this quote is inside a text string value (not after ':', '{', ',', '[')
+                        if not (prefix.endswith(':') or prefix.endswith('{') or prefix.endswith(',') or prefix.endswith('[')):
+                            s_repaired = s_repaired[:prev_quote] + "'" + s_repaired[prev_quote+1:]
+                            continue
+                break
+    except Exception as e:
+        audit["error_msg"] = str(e)
+
     # Fallback greedy regex repair
     match = re.search(r"\{[\s\S]*\}", cleaned_text)
     if match:
         try:
             s_cand = re.sub(r',\s*([\}\]])', r'\1', match.group(0))
+            s_cand = re.sub(r':\s*None\b', ': null', s_cand)
             parsed = json.loads(s_cand, strict=False)
             if isinstance(parsed, dict):
                 audit["repair_success"] = True
@@ -571,8 +607,8 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
         system_prompt: str,
         user_prompt: str,
         temperature: float = 0.7,
-        max_tokens: int = 768,  # Generous budget for detailed hypothesis + architectural modifications
-        max_retries: int = 2
+        max_tokens: int = 1280,  # Generous budget preventing end-of-sequence truncation
+        max_retries: int = 4
     ) -> Tuple[Dict[str, Any], str, Dict[str, Any], float]:
         import torch
         t0 = time.time()
@@ -602,8 +638,20 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
             inputs = self.tokenizer(current_prompt, return_tensors="pt").to(self.hf_model.device)
             input_tok_len = inputs["input_ids"].shape[1]
 
-            # Use low temperature for retry pass to enforce strict deterministic syntax
-            gen_temp = temperature if attempt == 1 else 0.2
+            # Progressive sampling temperatures across retries:
+            # Attempt 1: Standard exploration (temperature = 0.7)
+            # Attempt 2: Moderate entropy with explicit syntax correction (temperature = 0.4)
+            # Attempt 3: Low entropy focused generation (temperature = 0.1)
+            # Attempt 4: Deterministic greedy decoding (temperature = 0.0)
+            if attempt == 1:
+                gen_temp = temperature
+            elif attempt == 2:
+                gen_temp = 0.4
+            elif attempt == 3:
+                gen_temp = 0.1
+            else:
+                gen_temp = 0.0
+
             do_sample = (gen_temp > 0.0)
 
             with torch.inference_mode():
@@ -638,15 +686,23 @@ class LocalHuggingFaceAdapter(BaseProviderAdapter):
                 parsed["_parse_audit"] = audit
                 return parsed, last_generated, audit, audit["latency_seconds"]
 
-            # If attempt 1 failed to parse, trigger controlled retry
+            # If attempt failed to parse, trigger controlled retry with clean instruction
             if attempt < max_retries:
                 err_msg = audit.get("error_msg", "syntax error")
-                print(f"[Adapter:local] Attempt {attempt} returned malformed JSON ({err_msg}). Triggering controlled retry (temp=0.2)...", flush=True)
+                print(f"[Adapter:local] Attempt {attempt} returned malformed JSON ({err_msg}). Retrying (attempt {attempt+1}/{max_retries}, temp={gen_temp})...", flush=True)
+
+                retry_user_prompt = (
+                    f"{user_prompt}\n\n"
+                    f"CRITICAL FIX REQUIRED (Attempt {attempt+1}/{max_retries}):\n"
+                    f"Your previous output failed JSON parsing ({err_msg}).\n"
+                    f"Follow these strict formatting rules:\n"
+                    f"1. Inside text fields (hypothesis_text, reasoning), use SINGLE QUOTES 'like this' around architectural terms (e.g. 'swiglu', 'pre_ln'). NEVER use double quotes inside strings.\n"
+                    f"2. Separate every key-value line with a comma. Do not put trailing commas before closing braces }} or brackets ]].\n"
+                    f"3. Output ONLY the raw JSON object starting with {{ and ending with }}. No markdown blocks, no text before or after."
+                )
                 retry_messages = [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                    {"role": "assistant", "content": last_generated},
-                    {"role": "user", "content": f"CRITICAL FIX: Your output failed JSON parsing ({err_msg}). Re-write and output ONLY the raw, strictly valid JSON object conforming to the schema. No markdown fences, no explanatory text, and no trailing commas."}
+                    {"role": "user", "content": retry_user_prompt}
                 ]
                 if hasattr(self.tokenizer, "apply_chat_template"):
                     try:

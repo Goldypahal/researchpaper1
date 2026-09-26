@@ -91,6 +91,12 @@ You must respond with ONLY a valid JSON object matching this schema:
   },
   "reasoning": "<Detailed scientific rationale>"
 }
+
+CRITICAL JSON SYNTAX RULES:
+1. Output ONLY the raw JSON object starting with { and ending with }. Do NOT include markdown code blocks or surrounding commentary.
+2. Inside string values (hypothesis_text, reasoning), use SINGLE QUOTES 'like this' around technical terms (e.g. 'swiglu', 'rotary', 'pre_ln'). NEVER use unescaped double quotes inside text values.
+3. Every key-value pair in an object must be separated by a comma. Do NOT leave trailing commas before closing braces } or brackets ].
+4. Ensure scale_factor is either a float (e.g. 0.0625) or null.
 """
 
 
