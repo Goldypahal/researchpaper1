@@ -62,7 +62,8 @@ def run_kaggle_sweep(
     llm_model=None,
     api_key=None,
     allow_simulation=False,
-    fresh_run=True
+    fresh_run=True,
+    skip_comparative=False
 ):
     start_all = time.time()
     device_type = "cuda" if torch.cuda.is_available() else "cpu"
@@ -102,17 +103,20 @@ def run_kaggle_sweep(
     print(f"Execution Mode: {'FRESH RUN (clean un-cached)' if fresh_run else 'RESUME (caching enabled)'}\n")
 
     # 1. Main Comparative Search Sweep
-    print(">>> STAGE 1: Matched-Compute Comparative Search Benchmark <<<")
-    comp_results = run_comparative_experiment(
-        tasks=tasks,
-        methods=methods,
-        seeds=seeds,
-        max_iterations=iterations,
-        steps_per_candidate=steps_per_cand,
-        llm_provider=llm_provider,
-        llm_model=llm_model,
-        fresh_run=fresh_run
-    )
+    if not skip_comparative:
+        print(">>> STAGE 1: Matched-Compute Comparative Search Benchmark <<<")
+        comp_results = run_comparative_experiment(
+            tasks=tasks,
+            methods=methods,
+            seeds=seeds,
+            max_iterations=iterations,
+            steps_per_candidate=steps_per_cand,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            fresh_run=fresh_run
+        )
+    else:
+        print(">>> SKIPPING STAGE 1: Stage 1 results already secured. <<<")
 
     # 2. Reasoning Ablation Sweep
     if run_ablations:
@@ -191,6 +195,7 @@ if __name__ == "__main__":
     parser.add_argument("--allow-simulation", action="store_true", help="Opt-in to scripted simulation (FOR TESTING ONLY, forbidden for research papers)")
     parser.add_argument("--fresh", action="store_true", default=True, help="Clean run without loading cached traces (default: True)")
     parser.add_argument("--resume", dest="fresh", action="store_false", help="Resume from cached traces if present")
+    parser.add_argument("--skip_comparative", action="store_true", help="Skip Stage 1 and run only Stage 2 (Ablations)")
     parser.add_argument("--stress-test", action="store_true", help="Run 10-proposal stress test only without full benchmark")
     args = parser.parse_args()
 
@@ -220,5 +225,6 @@ if __name__ == "__main__":
         llm_model=chosen_model,
         api_key=args.api_key,
         allow_simulation=args.allow_simulation,
-        fresh_run=args.fresh
+        fresh_run=args.fresh,
+        skip_comparative=args.skip_comparative
     )
