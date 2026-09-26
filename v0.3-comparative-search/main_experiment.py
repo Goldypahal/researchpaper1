@@ -149,6 +149,8 @@ def run_comparative_experiment(
             runs = all_trajectories[task][method]
             best_vals = [r["best_val_loss"] for r in runs]
             best_oods = [r["best_ood_loss"] for r in runs]
+            gains = [r.get("improvement_pct", 0.0) for r in runs]
+            aucs = [r.get("auc_normalized_gain", r.get("auc_search_curve", 0.0)) for r in runs]
             gpu_times = [r["total_gpu_seconds"] for r in runs]
             cand_gpu_times = [r.get("candidate_train_gpu_sec", r["total_gpu_seconds"]) for r in runs]
             llm_inf_times = [r.get("llm_inference_sec", 0.0) for r in runs]
