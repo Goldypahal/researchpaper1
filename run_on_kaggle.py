@@ -93,13 +93,16 @@ def run_kaggle_sweep(
             print(f"\n[FATAL EXPERIMENT HALT] LLM adapter failed to connect: {e}\n", flush=True)
             sys.exit(1)
 
-    # Select standardized seeds (deterministic extension for up to N=50+)
+    # Select deterministic standardized seeds (first 10 preserve benchmark seeds)
     standard_seeds = [42, 101, 202, 303, 404, 505, 606, 707, 808, 909]
-    if num_seeds > len(standard_seeds):
-        extended = [1000 + i * 111 for i in range(num_seeds - len(standard_seeds))]
-        seeds = standard_seeds + extended
-    else:
+    if num_seeds <= len(standard_seeds):
         seeds = standard_seeds[:num_seeds]
+    else:
+        additional_needed = num_seeds - len(standard_seeds)
+        additional_seeds = [1000 + 1009 * i for i in range(additional_needed)]
+        seeds = standard_seeds + additional_seeds
+    assert len(seeds) == num_seeds, f"Expected {num_seeds} seeds, got {len(seeds)}"
+    assert len(set(seeds)) == num_seeds, f"Seeds contain duplicates: {seeds}"
 
     print(f"Starting Kaggle Experimental Sweep on device: {device_type.upper()}")
     print(f"Tasks: {tasks} | Methods: {methods}")
