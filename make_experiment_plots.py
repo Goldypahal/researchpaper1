@@ -36,15 +36,22 @@ from scipy import stats
 # ---------------------------------------------------------------------------
 # PATH CONFIGURATION
 # ---------------------------------------------------------------------------
-SRC_DIR = r"c:\Users\Asus\Downloads\kaggle_experiment_results (1)"
-PAPER_DIR = r"c:\Users\Asus\OneDrive\Desktop\Researchpapers\Research_Paper_1_AI_Improves_AI"
-ARTIFACT_DIR = r"C:\Users\Asus\.gemini\antigravity-ide\brain\b01a4057-0ada-4b95-a947-46376f223adb"
+REPO_DIR = os.path.dirname(os.path.abspath(__file__))
+DOWNLOADS_DIR = r"c:\Users\Asus\Downloads\kaggle_experiment_results (1)"
+
+# Prefer local repository data, fallback to Downloads if not found
+if os.path.exists(os.path.join(REPO_DIR, "v0.3-comparative-search", "comparative_search_results.json")):
+    SRC_DIR = REPO_DIR
+else:
+    SRC_DIR = DOWNLOADS_DIR
+
+PAPER_DIR = REPO_DIR
+ARTIFACT_DIR = os.path.join(REPO_DIR, "figures")
 
 FIG_DIRS = [
-    os.path.join(SRC_DIR, "figures"),
-    os.path.join(PAPER_DIR, "figures"),
-    ARTIFACT_DIR
+    os.path.join(REPO_DIR, "figures"),
 ]
+
 for d in FIG_DIRS:
     os.makedirs(d, exist_ok=True)
 
@@ -123,7 +130,7 @@ def save_and_distribute(fig, fname):
     for d in FIG_DIRS:
         out_path = os.path.join(d, fname)
         fig.savefig(out_path)
-    print(f"  [SAVED] {fname} to all 3 directories.")
+    print(f"  [SAVED] {fname} to figures directory.")
     plt.close(fig)
 
 # ---------------------------------------------------------------------------
