@@ -22,11 +22,8 @@ This guide explains how to execute the autonomous research pipeline on **Kaggle'
                └───────────────┬───────────────┘
                                ↓
                       Statistical Analysis
-
-               SECONDARY ROBUSTNESS EVIDENCE (Experiment B)
-                               │
-                 Optional Commercial Backends
-               (Groq / Mistral / Nemotron / Gemini)
+                               ↓
+             Automatic 7-Figure Publication Suite
 ```
 
 ### Why Local Open-Weight Execution is Scientifically Superior:
@@ -36,74 +33,78 @@ This guide explains how to execute the autonomous research pipeline on **Kaggle'
 
 ---
 
-## ⚡ Step-by-Step Instructions
+## ⚡ Option 1: The All-in-One Single Cell (Recommended)
 
-### Step 1: Open a New Kaggle Notebook
-1. Go to [kaggle.com/code](https://www.kaggle.com/code) and click **"New Notebook"**.
-2. In the right-hand **Notebook Settings** panel:
-   - **Accelerator**: Select **GPU T4 x2** (Free 30h/week).
-   - **Internet**: Toggle to **Internet on** (required to clone repo and load model weights).
-3. *(Optional for Experiment B)*: If running commercial API comparisons under **"Add-ons"** -> **"Secrets"**, you can add `GROQ_API_KEY`, `MISTRAL_API_KEY`, or `NVIDIA_API_KEY`. For Experiment A (primary), **NO API KEYS ARE NEEDED!**
+If you want to paste a single cell into a fresh Kaggle notebook and let it run from start to finish without any manual file uploads:
 
----
-
-### Step 2: Run the Notebook Cells
-
-You can either upload [`kaggle_research_runner.ipynb`](file:///c:/Users/Asus/OneDrive/Desktop/Researchpapers/Research_Paper_1_AI_Improves_AI/kaggle_research_runner.ipynb) directly, or run the following cells:
-
-#### Cell 1: Environment & GPU Verification
 ```python
+# ==============================================================================
+# ALL-IN-ONE KAGGLE RESEARCH RUNNER — RESEARCH PAPER 1
+# ==============================================================================
+import os, sys, glob, shutil
+from IPython.display import Image, display
+
+# 1. Environment & GPU Verification
+print(">>> STEP 1: Verifying GPU Acceleration <<<")
 !nvidia-smi
 import torch
-print(f"CUDA Available: {torch.cuda.is_available()}")
-if torch.cuda.is_available():
-    print(f"Device Name: {torch.cuda.get_device_name(0)}")
-    print(f"Device Count: {torch.cuda.device_count()}")
-    print(f"Total VRAM: {torch.cuda.get_device_properties(0).total_memory / (1024**3):.2f} GB")
-```
+assert torch.cuda.is_available(), "FATAL: GPU not detected! Enable GPU T4 x2 in Kaggle Settings."
+print(f"CUDA Available: {torch.cuda.is_available()} | Device: {torch.cuda.get_device_name(0)}")
 
-#### Cell 2: Clone Research Repository
-```python
-import os
+# 2. Sync Repository
+print("\n>>> STEP 2: Syncing Research Repository <<<")
 if not os.path.exists("researchpaper1"):
     !git clone https://github.com/Goldypahal/researchpaper1.git
     %cd researchpaper1
 else:
     %cd researchpaper1
     !git pull origin main
-```
 
-#### Cell 3: Install Required Dependencies
-```python
-# Install search baselines and local HuggingFace inference stack with 4-bit quantization
+# 3. Install Dependencies
+print("\n>>> STEP 3: Installing Dependencies <<<")
 !pip install -q optuna scipy matplotlib transformers accelerate bitsandbytes
+
+# 4. Launch Autonomous Sweep
+# Choose your sweep scale:
+#   --seeds 10 : Standard verification sweep (10 seeds, ~3.5 hours)
+#   --seeds 50 : Full expanded replication (50 seeds, ~14 hours)
+print("\n>>> STEP 4: Executing Experimental Sweep <<<")
+!python run_on_kaggle.py --seeds 10 --iterations 10 --steps 50 --provider local --model Qwen/Qwen2.5-7B-Instruct --quantization 4bit
+
+# 5. Display Generated Publication Figures
+print("\n>>> STEP 5: Rendering Publication Figures <<<")
+fig_files = sorted(glob.glob("figures/fig*.png"))
+for f in fig_files:
+    print(f"\n--- {f} ---")
+    display(Image(filename=f, width=850))
+
+# 6. Export Downloadable Zip Archive
+print("\n>>> STEP 6: Exporting Artifact Archive <<<")
+src_zip = "kaggle_experiment_results.zip"
+dst_zip = "/kaggle/working/kaggle_experiment_results.zip"
+if os.path.exists(src_zip):
+    shutil.copy2(src_zip, dst_zip)
+    print(f"\n[SUCCESS] Packaged archive ready: {dst_zip} ({os.path.getsize(dst_zip)/(1024**2):.2f} MB)")
+    print("Download 'kaggle_experiment_results.zip' from the right-hand Kaggle Output sidebar!")
 ```
 
-#### Cell 4: Primary Experiment — Full GPU Sweep with Local Open-Weight Model
-```python
-# Primary Scientific Evidence (Experiment A):
-# Runs Random vs TPE vs GA vs Local LLM Agent (Qwen2.5-7B 4-bit) across Dyck & FSM:
-!python run_on_kaggle.py --seeds 5 --iterations 10 --steps 50 --provider local --model Qwen/Qwen2.5-7B-Instruct --quantization 4bit
-```
-*(For even faster inference on smaller memory footprints, you can also use `--model Qwen/Qwen2.5-3B-Instruct`)*
+---
 
-#### Cell 5 (Optional): Secondary Robustness Experiment (Commercial Backends)
-If testing model-dependence (Experiment B):
-```python
-# Optional robustness checks using API backends:
-# Groq:
-# !python run_on_kaggle.py --seeds 5 --iterations 10 --steps 50 --provider groq --model openai/gpt-oss-120b
-# Mistral:
-# !python run_on_kaggle.py --seeds 5 --iterations 10 --steps 50 --provider mistral --model mistral-small-latest
-# NVIDIA Nemotron:
-# !python run_on_kaggle.py --seeds 5 --iterations 10 --steps 50 --provider nvidia --model nvidia/llama-3.1-nemotron-70b-instruct
-```
+## ⚡ Option 2: Step-by-Step Modular Notebook
 
-#### Cell 6: Save & Download Results
-```python
-!cp kaggle_experiment_results.zip /kaggle/working/
-print("Complete! Download 'kaggle_experiment_results.zip' from the right-hand Kaggle Output sidebar.")
-```
+You can also upload [`kaggle_research_runner.ipynb`](file:///c:/Users/Asus/OneDrive/Desktop/Researchpapers/Research_Paper_1_AI_Improves_AI/kaggle_research_runner.ipynb) directly into Kaggle.
+
+### Settings Checklist:
+1. **Accelerator**: Select **GPU T4 x2** (Free 30h/week on Kaggle).
+2. **Internet**: Toggle to **Internet on** (required to load HuggingFace weights and git sync).
+
+### Cells Breakdown:
+* **Cell 1**: GPU environment check (`!nvidia-smi`, CUDA memory).
+* **Cell 2**: Repo sync (`git clone` or `git pull origin main`).
+* **Cell 3**: Dependency install (`optuna`, `transformers`, `bitsandbytes`).
+* **Cell 4**: Execution command with configurable `--seeds 10` or `--seeds 50`.
+* **Cell 5**: Inline publication figure viewer (`IPython.display.Image`).
+* **Cell 6**: Export to `/kaggle/working/kaggle_experiment_results.zip`.
 
 ---
 
@@ -111,4 +112,5 @@ print("Complete! Download 'kaggle_experiment_results.zip' from the right-hand Ka
 
 1. Once the notebook finishes running, look at the right sidebar under **"Output"** -> `/kaggle/working/`.
 2. Click the three dots next to `kaggle_experiment_results.zip` and select **"Download"**.
-3. Extract the zip into your local `Research_Paper_1_AI_Improves_AI` directory. All traces, statistical reports, and `EXPERIMENT_REGISTRY.json` entries will immediately sync!
+3. Extract the zip into your local `Research_Paper_1_AI_Improves_AI` directory.
+4. All traces, statistical reports, updated figures, and `EXPERIMENT_REGISTRY.json` entries will immediately sync!

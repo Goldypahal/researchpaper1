@@ -93,9 +93,13 @@ def run_kaggle_sweep(
             print(f"\n[FATAL EXPERIMENT HALT] LLM adapter failed to connect: {e}\n", flush=True)
             sys.exit(1)
 
-    # Select standardized seeds
+    # Select standardized seeds (deterministic extension for up to N=50+)
     standard_seeds = [42, 101, 202, 303, 404, 505, 606, 707, 808, 909]
-    seeds = standard_seeds[:num_seeds]
+    if num_seeds > len(standard_seeds):
+        extended = [1000 + i * 111 for i in range(num_seeds - len(standard_seeds))]
+        seeds = standard_seeds + extended
+    else:
+        seeds = standard_seeds[:num_seeds]
 
     print(f"Starting Kaggle Experimental Sweep on device: {device_type.upper()}")
     print(f"Tasks: {tasks} | Methods: {methods}")
@@ -131,11 +135,20 @@ def run_kaggle_sweep(
             llm_model=llm_model
         )
 
-    # 3. Packaging Results
+    # 3. Automatic Figure Generation
+    plot_script = os.path.join(WORKSPACE_ROOT, "make_experiment_plots.py")
+    if os.path.exists(plot_script):
+        print("\n>>> Automatically generating publication figures via make_experiment_plots.py <<<")
+        try:
+            subprocess.run([sys.executable, plot_script], check=False)
+        except Exception as e:
+            print(f"Warning: automatic plot generation encountered an issue: {e}")
+
+    # 4. Packaging Results
     elapsed = time.time() - start_all
     print(f"\nAll experimental sweeps completed in {elapsed/60.0:.2f} minutes.")
 
-    # Create zip archive of all results, traces, and registry
+    # Create zip archive of all results, traces, figures, and registry
     archive_name = "kaggle_experiment_results.zip"
     archive_path = os.path.join(WORKSPACE_ROOT, archive_name)
     print(f"Packaging artifacts into: {archive_path}")
@@ -144,6 +157,8 @@ def run_kaggle_sweep(
         "EXPERIMENT_REGISTRY.json",
         "research_questions_and_hypotheses.md",
         "README.md",
+        "kaggle_experiment_analysis.md",
+        "make_experiment_plots.py",
         os.path.join("v0.2-benchmark-validation", "benchmark_validation_report.md"),
         os.path.join("v0.2-benchmark-validation", "benchmark_validation_results.json"),
         os.path.join("v0.3-comparative-search", "comparative_search_report.md"),
@@ -159,8 +174,12 @@ def run_kaggle_sweep(
             if os.path.exists(abs_path):
                 zipf.write(abs_path, arcname=rel_path)
 
-        # Include all traces
-        for sub in [os.path.join("v0.3-comparative-search", "traces"), os.path.join("v0.4-reasoning-ablation", "traces")]:
+        # Include all traces and generated figures
+        for sub in [
+            os.path.join("v0.3-comparative-search", "traces"),
+            os.path.join("v0.4-reasoning-ablation", "traces"),
+            "figures"
+        ]:
             sub_abs = os.path.join(WORKSPACE_ROOT, sub)
             if os.path.exists(sub_abs):
                 for root, _, files in os.walk(sub_abs):
