@@ -1,0 +1,38 @@
+{
+  "total_valid_trajectories": 4,
+  "failure_accounting": {
+    "crashed_iterations": 0,
+    "invalid_proposals": 0,
+    "total_proposals": 12
+  },
+  "paired_decomposition_results": {
+    "abs_position": {},
+    "dyck": {}
+  },
+  "holm_bonferroni_fwer_correction": [],
+  "calibration_analysis": {
+    "n_predictions": 8,
+    "mae": 0.680889,
+    "directional_accuracy_pct": 12.5,
+    "spearman_rank_correlation": {
+      "rho": 0.0,
+      "p_value": 1.0
+    },
+    "confidence_binned_calibration": [
+      {
+        "bin": "[0, 0.02)",
+        "count": 4,
+        "mean_predicted": 0.0,
+        "mean_actual": -0.973225,
+        "bin_error": 0.973225
+      },
+      {
+        "bin": "[0.02, 0.05)",
+        "count": 4,
+        "mean_predicted": 0.03,
+        "mean_actual": -0.192176,
+        "bin_error": 0.222176
+      }
+    ]
+  }
+}

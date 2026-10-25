@@ -1,12 +1,14 @@
 """
-Kaggle GPU Automated Research Pipeline.
-Designed to execute on Kaggle's NVIDIA T4 / P100 GPU accelerators:
-  - Eliminates local CPU thermal load and laptop heating.
-  - Leverages fast CUDA tensor operations for large-sample sweeps (N=10 to 50).
-  - Automatically exports all traces, logs, reports, and figures to a zip archive.
+run_on_kaggle.py
 
-Usage in Kaggle Notebook (with GPU accelerator enabled):
-  !python run_on_kaggle.py --seeds 5 --iterations 10
+Kaggle GPU Automated Research Pipeline (Resilient & Audited).
+Enforces:
+  1. Default RESUME behavior (never silently wipes or overwrites completed runs)
+  2. Safe archiving: --fresh moves existing traces to traces_archived_<timestamp>/
+  3. Strict version validation: skips only traces that match code_version & COMPLETE_VALID
+  4. Time-guard: cleanly stops before Kaggle 12-hour session limit
+  5. Continuous periodic packaging: zips traces every batch so no results are lost on timeout
+  6. Supports all arms: random, tpe, evolutionary, prior_sampler, tpe_warm, and llm decomposition
 """
 
 import os
@@ -14,19 +16,18 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import sys
 import time
 import json
+import glob
+import shutil
 import zipfile
 import argparse
 import subprocess
 import torch
+from typing import List, Dict, Any, Optional
 
 WORKSPACE_ROOT = os.path.abspath(os.path.dirname(__file__))
-sys.path.insert(0, os.path.join(WORKSPACE_ROOT, "v0.3-comparative-search"))
-sys.path.insert(0, os.path.join(WORKSPACE_ROOT, "v0.4-reasoning-ablation"))
+sys.path.insert(0, WORKSPACE_ROOT)
 
-from evaluator.immutable_evaluator import ImmutableEvaluator
-from main_experiment import run_comparative_experiment
-from run_reasoning_ablation import run_reasoning_ablation_suite
-from benchmarks.complexity_ladder import evaluate_complexity_point
+from scripts.run_comparative_search import ComparativeSearchRunner, get_code_version
 
 
 def check_gpu_environment():
@@ -38,11 +39,9 @@ def check_gpu_environment():
     if cuda_avail:
         device_name = torch.cuda.get_device_name(0)
         device_count = torch.cuda.device_count()
-        capability = torch.cuda.get_device_capability(0)
         total_mem = torch.cuda.get_device_properties(0).total_memory / (1024**3)
         print(f"Device Name: {device_name}")
         print(f"Device Count: {device_count}")
-        print(f"Compute Capability: {capability}")
         print(f"Total GPU Memory: {total_mem:.2f} GB")
         print("Status: FAST ACCELERATION ENABLED.")
     else:
@@ -51,202 +50,178 @@ def check_gpu_environment():
     return cuda_avail
 
 
-def run_kaggle_sweep(
-    tasks=["dyck", "fsm"],
-    methods=["random", "tpe", "evolutionary", "llm"],
-    num_seeds=5,
-    iterations=10,
-    steps_per_cand=50,
-    run_ablations=True,
-    llm_provider=None,
-    llm_model=None,
-    api_key=None,
-    allow_simulation=False,
-    fresh_run=True,
-    skip_comparative=False
+def package_results_zip(traces_dir: str, output_zip_path: str):
+    """Packages all valid traces, registry entries, and logs into a zip file."""
+    os.makedirs(os.path.dirname(os.path.abspath(output_zip_path)), exist_ok=True)
+    temp_zip = output_zip_path + ".tmp"
+    with zipfile.ZipFile(temp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+        if os.path.exists(traces_dir):
+            for f in glob.glob(os.path.join(traces_dir, "*")):
+                zf.write(f, os.path.join("traces", os.path.basename(f)))
+        registry_path = os.path.join(WORKSPACE_ROOT, "registry.jsonl")
+        if os.path.exists(registry_path):
+            zf.write(registry_path, "registry.jsonl")
+    if os.path.exists(output_zip_path):
+        os.remove(output_zip_path)
+    os.replace(temp_zip, output_zip_path)
+    print(f"[ZIP PACKAGER] Updated archive: {output_zip_path} ({os.path.getsize(output_zip_path)/(1024**2):.2f} MB)")
+
+
+def run_kaggle_pipeline(
+    tasks: List[str] = ["dyck", "fsm", "abs_position"],
+    arms: List[str] = ["random", "tpe", "evolutionary", "llm"],
+    llm_modes: List[str] = ["named_real", "anonymized_real", "named_shuffled"],
+    num_seeds: int = 10,
+    iterations: int = 10,
+    steps_per_cand: int = 50,
+    llm_provider: str = "local",
+    llm_model: str = "Qwen/Qwen2.5-7B-Instruct",
+    fresh_run: bool = False,
+    max_hours: float = 11.0,
+    zip_frequency: int = 5
 ):
-    start_all = time.time()
-    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+    start_time = time.time()
+    traces_dir = os.path.join(WORKSPACE_ROOT, "traces")
 
-    # Preflight Check: Real LLM Connection Verification
-    if "llm" in methods:
-        print("=" * 70, flush=True)
-        print("PREFLIGHT HEALTH CHECK: REAL LLM REASONING ADAPTER", flush=True)
-        print("=" * 70, flush=True)
-        from agent_scaffold.llm_agent import LLMResearchAgent, SimulationDisallowedError
-        try:
-            test_agent = LLMResearchAgent(
-                provider=llm_provider,
-                model=llm_model,
-                api_key=api_key,
-                strict=True,
-                allow_simulation=allow_simulation
+    # Safe archiving if fresh_run requested
+    if fresh_run and os.path.exists(traces_dir):
+        archive_dir = os.path.join(WORKSPACE_ROOT, f"traces_archived_{int(time.time())}")
+        print(f"[SAFETY] --fresh requested: moving existing traces to {archive_dir}")
+        shutil.move(traces_dir, archive_dir)
+
+    os.makedirs(traces_dir, exist_ok=True)
+
+    # Determine Kaggle output zip destination
+    kaggle_working = "/kaggle/working" if os.path.exists("/kaggle/working") else WORKSPACE_ROOT
+    output_zip = os.path.join(kaggle_working, "kaggle_experiment_results.zip")
+
+    # Load standard seeds
+    standard_seeds = [42, 101, 202, 303, 404, 505, 606, 707, 808, 909, 111, 222, 333, 444, 555][:num_seeds]
+
+    # Pre-generate zero-shot proposal pool for prior_sampler / tpe_warm
+    proposal_pool = None
+    if "prior_sampler" in arms or "tpe_warm" in arms:
+        print("\n>>> PRE-GENERATING ZERO-SHOT PROPOSAL POOL FOR HYBRID ARMS <<<")
+        allow_sim = os.environ.get("ALLOW_LLM_SIMULATION", "0").lower() in ("1", "true", "yes")
+        temp_agent = LLMSearchAgent(
+            provider=llm_provider,
+            model=llm_model,
+            strict=True,
+            allow_simulation=allow_sim,
+            task_framing="named",
+            feedback="none"
+        )
+        proposal_pool = []
+        for p_idx in range(1, 21):
+            p = temp_agent.propose_experiment(
+                iteration_idx=p_idx,
+                history=[],
+                incumbent_best_loss=99.0,
+                base_loss=4.2,
+                task="dyck",
+                seed=42 + p_idx
             )
-            ok, test_resp = test_agent.verify_connection()
-            if not ok:
-                raise RuntimeError(f"LLM live verification ping failed: {test_resp}")
-            print("Status: REAL LLM CONNECTION VERIFIED.\n", flush=True)
-        except SimulationDisallowedError as e:
-            print(f"\n[FATAL EXPERIMENT HALT] {e}\n", flush=True)
-            sys.exit(1)
-        except Exception as e:
-            print(f"\n[FATAL EXPERIMENT HALT] LLM adapter failed to connect: {e}\n", flush=True)
-            sys.exit(1)
+            proposal_pool.append(p)
+        print(f"[SUCCESS] Pre-generated {len(proposal_pool)} zero-shot proposals for prior sampling.")
 
-    # Select deterministic standardized seeds (first 10 preserve benchmark seeds)
-    standard_seeds = [42, 101, 202, 303, 404, 505, 606, 707, 808, 909]
-    if num_seeds <= len(standard_seeds):
-        seeds = standard_seeds[:num_seeds]
-    else:
-        additional_needed = num_seeds - len(standard_seeds)
-        additional_seeds = [1000 + 1009 * i for i in range(additional_needed)]
-        seeds = standard_seeds + additional_seeds
-    assert len(seeds) == num_seeds, f"Expected {num_seeds} seeds, got {len(seeds)}"
-    assert len(set(seeds)) == num_seeds, f"Seeds contain duplicates: {seeds}"
+    # Execute Planned Runs
+    runs_completed = 0
+    trajectories_run = []
 
-    print(f"Starting Kaggle Experimental Sweep on device: {device_type.upper()}")
-    print(f"Tasks: {tasks} | Methods: {methods}")
-    print(f"Seeds: {seeds} (N={len(seeds)}) | Horizon: K={iterations} | Steps: {steps_per_cand}")
-    print(f"Execution Mode: {'FRESH RUN (clean un-cached)' if fresh_run else 'RESUME (caching enabled)'}\n")
-
-    # 1. Main Comparative Search Sweep
-    if not skip_comparative:
-        print(">>> STAGE 1: Matched-Compute Comparative Search Benchmark <<<")
-        comp_results = run_comparative_experiment(
-            tasks=tasks,
-            methods=methods,
-            seeds=seeds,
-            max_iterations=iterations,
+    for task in tasks:
+        runner = ComparativeSearchRunner(
+            task=task,
+            seed=42,  # overridden per run
+            iterations=iterations,
             steps_per_candidate=steps_per_cand,
             llm_provider=llm_provider,
             llm_model=llm_model,
-            fresh_run=fresh_run
-        )
-    else:
-        print(">>> SKIPPING STAGE 1: Stage 1 results already secured. <<<")
-
-    # 2. Reasoning Ablation Sweep
-    if run_ablations:
-        print("\n>>> STAGE 2: Cognitive Reasoning Ablation Suite <<<")
-        ablation_results = run_reasoning_ablation_suite(
-            task="dyck",
-            modes=["no_history", "history_no_reflection", "full", "critic_refine"],
-            seeds=seeds[:min(3, len(seeds))],
-            max_iterations=min(6, iterations),
-            steps_per_candidate=steps_per_cand,
-            llm_provider=llm_provider,
-            llm_model=llm_model
+            traces_dir=traces_dir
         )
 
-    # 3. Automatic Figure Generation
-    plot_script = os.path.join(WORKSPACE_ROOT, "make_experiment_plots.py")
-    if os.path.exists(plot_script):
-        print("\n>>> Automatically generating publication figures via make_experiment_plots.py <<<")
-        try:
-            subprocess.run([sys.executable, plot_script], check=False)
-        except Exception as e:
-            print(f"Warning: automatic plot generation encountered an issue: {e}")
+        for arm in arms:
+            # Map arm conditions
+            if arm == "llm":
+                target_modes = llm_modes
+            else:
+                target_modes = ["standard"]
 
-    # 4. Packaging Results
-    elapsed = time.time() - start_all
-    print(f"\nAll experimental sweeps completed in {elapsed/60.0:.2f} minutes.")
+            for mode_desc in target_modes:
+                framing = "anonymized" if "anonymized" in mode_desc else "named"
+                feedback = "shuffled" if "shuffled" in mode_desc else ("none" if "none" in mode_desc else "real")
+                obfuscated = ("obfuscated" in mode_desc)
 
-    # Create zip archive of all results, traces, figures, and registry
-    archive_name = "kaggle_experiment_results.zip"
-    archive_path = os.path.join(WORKSPACE_ROOT, archive_name)
-    print(f"Packaging artifacts into: {archive_path}")
+                for s in standard_seeds:
+                    # Time guard check
+                    elapsed_hours = (time.time() - start_time) / 3600.0
+                    if elapsed_hours >= max_hours:
+                        print(f"\n[TIME-GUARD] Approaching max budget ({elapsed_hours:.2f}h >= {max_hours:.2f}h). Stopping gracefully.")
+                        package_results_zip(traces_dir, output_zip)
+                        return
 
-    files_to_pack = [
-        "EXPERIMENT_REGISTRY.json",
-        "research_questions_and_hypotheses.md",
-        "README.md",
-        "kaggle_experiment_analysis.md",
-        "make_experiment_plots.py",
-        os.path.join("v0.2-benchmark-validation", "benchmark_validation_report.md"),
-        os.path.join("v0.2-benchmark-validation", "benchmark_validation_results.json"),
-        os.path.join("v0.3-comparative-search", "comparative_search_report.md"),
-        os.path.join("v0.3-comparative-search", "comparative_search_results.json"),
-        os.path.join("v0.4-reasoning-ablation", "reasoning_ablation_report.md"),
-        os.path.join("v0.4-reasoning-ablation", "reasoning_ablation_results.json"),
-        os.path.join("evaluator", "adversarial_gaming_report.md"),
-    ]
+                    runner.seed = s
+                    runner.evaluator = runner.evaluator if runner.evaluator.seed == s else None
+                    if runner.evaluator is None:
+                        from evaluator.immutable_evaluator import ImmutableEvaluator
+                        runner.evaluator = ImmutableEvaluator(task=task, seed=s)
 
-    with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for rel_path in files_to_pack:
-            abs_path = os.path.join(WORKSPACE_ROOT, rel_path)
-            if os.path.exists(abs_path):
-                zipf.write(abs_path, arcname=rel_path)
+                    res = runner.run_trajectory(
+                        arm=arm,
+                        task_framing=framing,
+                        feedback=feedback,
+                        obfuscated=obfuscated,
+                        proposal_pool=proposal_pool,
+                        skip_if_valid=True
+                    )
+                    trajectories_run.append(res)
+                    runs_completed += 1
 
-        # Include all traces and generated figures
-        for sub in [
-            os.path.join("v0.3-comparative-search", "traces"),
-            os.path.join("v0.4-reasoning-ablation", "traces"),
-            "figures"
-        ]:
-            sub_abs = os.path.join(WORKSPACE_ROOT, sub)
-            if os.path.exists(sub_abs):
-                for root, _, files in os.walk(sub_abs):
-                    for file in files:
-                        fp = os.path.join(root, file)
-                        arc = os.path.relpath(fp, WORKSPACE_ROOT)
-                        zipf.write(fp, arcname=arc)
+                    # Continuous packaging
+                    if runs_completed % zip_frequency == 0:
+                        package_results_zip(traces_dir, output_zip)
 
-    # Copy to /kaggle/working/ if running in Kaggle subdirectory
-    kaggle_out = "/kaggle/working"
-    if os.path.exists(kaggle_out):
-        dest_path = os.path.join(kaggle_out, archive_name)
-        if os.path.abspath(dest_path) != os.path.abspath(archive_path):
-            import shutil
-            shutil.copy2(archive_path, dest_path)
-            print(f"[Exported] Copied zip to: {dest_path}")
-
-    print(f"\n[DONE] Kaggle execution finished. Download '{archive_name}' from the Kaggle Output panel.")
+    # Final packaging
+    package_results_zip(traces_dir, output_zip)
+    print("\n" + "=" * 70)
+    print(f"PIPELINE RUN COMPLETE: {runs_completed} trajectories executed/verified.")
+    print(f"Results archived at: {output_zip}")
+    print("=" * 70)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run researchpaper1 experimental sweep on Kaggle GPU.")
-    parser.add_argument("--seeds", type=int, default=5, help="Number of seed replications (e.g. 5, 10, 30)")
-    parser.add_argument("--iterations", type=int, default=10, help="Search horizon K (iterations per arm)")
-    parser.add_argument("--steps", type=int, default=50, help="Training steps per candidate")
-    parser.add_argument("--no_ablations", action="store_true", help="Skip reasoning ablation suite")
-    parser.add_argument("--provider", type=str, default="local", choices=["local", "nvidia", "groq", "mistral", "gemini", "openai", "anthropic", "openrouter"], help="LLM reasoning backend (default: local open-weight model)")
-    parser.add_argument("--model", type=str, default="Qwen/Qwen2.5-7B-Instruct", help="LLM model identifier (default: Qwen/Qwen2.5-7B-Instruct)")
-    parser.add_argument("--quantization", type=str, default="4bit", choices=["4bit", "8bit", "none"], help="Quantization precision for local model on GPU (default: 4bit)")
-    parser.add_argument("--api-key", type=str, default=None, help="Explicit API key for secondary commercial backends")
-    parser.add_argument("--local-llm", type=str, default=None, help="Alias for local model identifier (e.g. Qwen/Qwen2.5-7B-Instruct or Qwen/Qwen2.5-3B-Instruct)")
-    parser.add_argument("--allow-simulation", action="store_true", help="Opt-in to scripted simulation (FOR TESTING ONLY, forbidden for research papers)")
-    parser.add_argument("--fresh", action="store_true", default=True, help="Clean run without loading cached traces (default: True)")
-    parser.add_argument("--resume", dest="fresh", action="store_false", help="Resume from cached traces if present")
-    parser.add_argument("--skip_comparative", action="store_true", help="Skip Stage 1 and run only Stage 2 (Ablations)")
-    parser.add_argument("--stress-test", action="store_true", help="Run 10-proposal stress test only without full benchmark")
+    parser = argparse.ArgumentParser(description="Kaggle Research Runner (Audited & Resumable)")
+    parser.add_argument("--seeds", type=int, default=10, help="Number of random seeds (default: 10)")
+    parser.add_argument("--iterations", type=int, default=10, help="Proposals per trajectory (default: 10)")
+    parser.add_argument("--steps", type=int, default=50, help="Training steps per candidate (default: 50)")
+    parser.add_argument("--tasks", nargs="+", default=["dyck", "fsm", "abs_position"])
+    parser.add_argument("--arms", nargs="+", default=["random", "tpe", "evolutionary", "prior_sampler", "llm"])
+    parser.add_argument("--llm_modes", nargs="+", default=["named_real", "anonymized_real", "named_shuffled"])
+    parser.add_argument("--provider", type=str, default="local", choices=["local", "nvidia", "groq", "mistral", "gemini", "openai", "anthropic"])
+    parser.add_argument("--model", type=str, default="Qwen/Qwen2.5-7B-Instruct")
+    parser.add_argument("--quantization", type=str, default="4bit", choices=["4bit", "8bit", "none"])
+    parser.add_argument("--allow-simulation", action="store_true", help="Opt-in to simulation for CPU testing only")
+    parser.add_argument("--fresh", action="store_true", help="Archive old traces and start clean")
+    parser.add_argument("--max-hours", type=float, default=11.0, help="Session time-guard threshold in hours")
     args = parser.parse_args()
 
-    chosen_model = args.local_llm or args.model
-    if args.provider == "local" or args.local_llm:
-        os.environ["LOCAL_LLM_MODEL"] = chosen_model
+    if args.allow_simulation:
+        os.environ["ALLOW_LLM_SIMULATION"] = "1"
+
+    if args.provider == "local":
+        os.environ["LOCAL_LLM_MODEL"] = args.model
         os.environ["LOCAL_LLM_QUANT"] = args.quantization
 
     check_gpu_environment()
 
-    if args.stress_test:
-        from test_local_llm_proposals import run_proposal_stress_test
-        run_proposal_stress_test(
-            num_proposals=args.iterations,
-            provider=args.provider,
-            model=chosen_model,
-            quantization=args.quantization
-        )
-        sys.exit(0)
-
-    run_kaggle_sweep(
+    run_kaggle_pipeline(
+        tasks=args.tasks,
+        arms=args.arms,
+        llm_modes=args.llm_modes,
         num_seeds=args.seeds,
         iterations=args.iterations,
         steps_per_cand=args.steps,
-        run_ablations=not args.no_ablations,
         llm_provider=args.provider,
-        llm_model=chosen_model,
-        api_key=args.api_key,
-        allow_simulation=args.allow_simulation,
+        llm_model=args.model,
         fresh_run=args.fresh,
-        skip_comparative=args.skip_comparative
+        max_hours=args.max_hours
     )

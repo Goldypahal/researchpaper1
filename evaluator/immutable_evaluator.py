@@ -169,12 +169,14 @@ class ImmutableEvaluator:
         config: Dict[str, Any],
         max_steps: int = 150,
         batch_size: int = 32,
-        timeout_seconds: float = 120.0
+        timeout_seconds: float = 120.0,
+        train_seed: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Executes a controlled candidate training run under strict resource and integrity accounting.
         """
         start_time = time.time()
+        effective_train_seed = train_seed if train_seed is not None else self.seed
         
         # 1. Parameter extraction with safe fallbacks and bounded sanitization
         lr = float(config.get("lr", 1e-3))
@@ -191,8 +193,8 @@ class ImmutableEvaluator:
         topology = str(config.get("topology", "pre_ln"))
         scale_factor = config.get("scale_factor", None)
 
-        # 2. Build candidate model instance
-        torch.manual_seed(self.seed)
+        # 2. Build candidate model instance with explicit seed
+        torch.manual_seed(effective_train_seed)
         model = SmallTransformerLM(
             vocab_size=1024,
             d_model=d_model,
@@ -220,11 +222,14 @@ class ImmutableEvaluator:
         train_loss_accum = 0.0
         step_count = 0
 
+        # Deterministic generator for data batch index selection
+        data_rng = torch.Generator().manual_seed(effective_train_seed)
+
         for step in range(max_steps):
             if (time.time() - start_time) > timeout_seconds:
                 raise TimeoutError(f"Candidate exceeded compute budget limit of {timeout_seconds} seconds.")
 
-            idx = torch.randint(0, len(train_data) - batch_size + 1, (1,)).item()
+            idx = torch.randint(0, len(train_data) - batch_size + 1, (1,), generator=data_rng).item()
             batch = train_data[idx:idx + batch_size].to(self.device)
             inputs = batch[:, :-1]
             targets = batch[:, 1:]
@@ -258,6 +263,7 @@ class ImmutableEvaluator:
         return {
             "task": self.task,
             "seed": self.seed,
+            "train_seed": effective_train_seed,
             "device": self.device.type,
             "device_name": self.device_name,
             "train_loss": round(train_loss_final, 6),
@@ -277,4 +283,50 @@ class ImmutableEvaluator:
             "cpu_seconds": round(cpu_seconds, 3),
             "steps_completed": step_count,
             "evaluator_signature": self.evaluator_id
+        }
+
+    def retrain_and_evaluate_incumbent(
+        self,
+        config: Dict[str, Any],
+        r_seeds: int = 5,
+        seed_offset: int = 10000,
+        max_steps: int = 50,
+        batch_size: int = 32
+    ) -> Dict[str, Any]:
+        """
+        Retrains the selected candidate configuration across R independent fresh training seeds.
+        Computes unbiased mean and std of holdout test loss and OOD loss.
+        Completely eliminates Best-of-K selection bias.
+        """
+        import numpy as np
+        test_losses = []
+        ood_losses = []
+        val_losses = []
+        train_gpu_secs = []
+
+        for r in range(r_seeds):
+            t_seed = seed_offset + r
+            res = self.train_and_evaluate_candidate(
+                config=config,
+                max_steps=max_steps,
+                batch_size=batch_size,
+                train_seed=t_seed
+            )
+            val_losses.append(res["val_loss"])
+            test_losses.append(res["test_loss"])
+            ood_losses.append(res["ood_loss"])
+            train_gpu_secs.append(res["gpu_seconds"])
+
+        return {
+            "num_eval_seeds": r_seeds,
+            "seed_offset": seed_offset,
+            "test_loss_mean": round(float(np.mean(test_losses)), 6),
+            "test_loss_std": round(float(np.std(test_losses, ddof=1)), 6) if r_seeds > 1 else 0.0,
+            "test_loss_seeds": test_losses,
+            "ood_loss_mean": round(float(np.mean(ood_losses)), 6),
+            "ood_loss_std": round(float(np.std(ood_losses, ddof=1)), 6) if r_seeds > 1 else 0.0,
+            "ood_loss_seeds": ood_losses,
+            "val_loss_mean": round(float(np.mean(val_losses)), 6),
+            "val_loss_std": round(float(np.std(val_losses, ddof=1)), 6) if r_seeds > 1 else 0.0,
+            "mean_train_gpu_sec": round(float(np.mean(train_gpu_secs)), 3)
         }

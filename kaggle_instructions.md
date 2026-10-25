@@ -64,21 +64,21 @@ else:
 print("\n>>> STEP 3: Installing Dependencies <<<")
 !pip install -q optuna scipy matplotlib transformers accelerate bitsandbytes
 
-# 4. Launch Autonomous Sweep
-# Choose your sweep scale:
-#   --seeds 10 : Standard verification sweep (10 seeds, ~3.5 hours)
-#   --seeds 50 : Full expanded replication (50 seeds, ~14 hours)
-print("\n>>> STEP 4: Executing Experimental Sweep <<<")
-!python run_on_kaggle.py --seeds 10 --iterations 10 --steps 50 --provider local --model Qwen/Qwen2.5-7B-Instruct --quantization 4bit
+# 4. Optional: Run Phase 4 Noise Floor & Fidelity Calibration (~1.5 hours)
+# Measures retrain noise sigma_retrain and rank agreement between 50 and 200 steps
+# !python scripts/measure_noise_and_fidelity.py
 
-# 5. Display Generated Publication Figures
-print("\n>>> STEP 5: Rendering Publication Figures <<<")
-fig_files = sorted(glob.glob("figures/fig*.png"))
-for f in fig_files:
-    print(f"\n--- {f} ---")
-    display(Image(filename=f, width=850))
+# 5. Launch Experimental Sweep
+# Stage A: Fast Classical Baselines + Hybrid Arms (Random, TPE, GA, Prior-Sampler)
+# !python run_on_kaggle.py --seeds 10 --iterations 10 --steps 50 --arms random tpe evolutionary prior_sampler
 
-# 6. Export Downloadable Zip Archive
+# Stage B: Full Decomposition Sweep (LLM Named vs Anonymized vs Shuffled)
+print("\n>>> STEP 5: Executing Experimental Sweep <<<")
+!python run_on_kaggle.py --seeds 10 --iterations 10 --steps 50 --arms random tpe evolutionary llm --llm_modes named_real anonymized_real named_shuffled --provider local --model Qwen/Qwen2.5-7B-Instruct --quantization 4bit
+
+# 6. Run Statistical Decomposition & FWER Corrections
+print("\n>>> STEP 6: Generating Statistical Decomposition Report <<<")
+!python analysis/generate_decomposition_analysis.py
 print("\n>>> STEP 6: Exporting Artifact Archive <<<")
 src_zip = "kaggle_experiment_results.zip"
 dst_zip = "/kaggle/working/kaggle_experiment_results.zip"

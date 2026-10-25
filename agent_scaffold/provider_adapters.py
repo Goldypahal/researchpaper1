@@ -39,10 +39,18 @@ class LLMProposalParseError(RuntimeError):
         self.audit_metadata = audit_metadata or {}
 
 
+def repair_json_escapes(s: str) -> str:
+    """Repairs invalid backslash escapes such as LaTeX \\Delta or regex \\s into valid JSON \\\\."""
+    if not s:
+        return s
+    return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
+
+
 def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
     """
     Rigorously parses LLM output into JSON.
     Tracks raw validity vs repair without pretending repaired responses were originally valid.
+    Records parse_status: 'OK', 'REPAIRED', or 'FAILED'.
 
     Returns:
         (parsed_dict_or_None, audit_dict)
@@ -51,6 +59,7 @@ def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]
         "json_valid": False,
         "repair_attempted": False,
         "repair_success": False,
+        "parse_status": "FAILED",
         "error_msg": None,
         "raw_response": text
     }
@@ -66,6 +75,7 @@ def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]
         parsed = json.loads(cleaned_text, strict=False)
         if isinstance(parsed, dict):
             audit["json_valid"] = True
+            audit["parse_status"] = "OK"
             return parsed, audit
     except Exception as e:
         raw_err = str(e)
@@ -78,6 +88,7 @@ def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]
             parsed = json.loads(candidate_block, strict=False)
             if isinstance(parsed, dict):
                 audit["json_valid"] = True
+                audit["parse_status"] = "OK"
                 return parsed, audit
         except Exception:
             pass
@@ -111,6 +122,7 @@ def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]
                             parsed = json.loads(candidate_braces, strict=False)
                             if isinstance(parsed, dict):
                                 audit["json_valid"] = True
+                                audit["parse_status"] = "OK"
                                 return parsed, audit
                         except Exception:
                             pass
@@ -132,21 +144,24 @@ def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]
         # A. Strip any remaining markdown code block markers
         s_repaired = re.sub(r"```(?:json)?", "", s).strip()
 
-        # B. Normalize Python literals to JSON
+        # B. Repair invalid escapes (e.g. \Delta, \s)
+        s_repaired = repair_json_escapes(s_repaired)
+
+        # C. Normalize Python literals to JSON
         s_repaired = re.sub(r':\s*None\b', ': null', s_repaired)
         s_repaired = re.sub(r':\s*True\b', ': true', s_repaired)
         s_repaired = re.sub(r':\s*False\b', ': false', s_repaired)
 
-        # C. Strip trailing commas before closing braces/brackets
+        # D. Strip trailing commas before closing braces/brackets
         s_repaired = re.sub(r',\s*([\}\]])', r'\1', s_repaired)
 
-        # D. Add missing commas between key-value pairs across newlines
+        # E. Add missing commas between key-value pairs across newlines
         s_repaired = re.sub(r'([0-9"truefalsenull\]\}])\s*\n\s*"([a-zA-Z0-9_]+)"\s*:', r'\1,\n"\2":', s_repaired)
 
-        # E. Replace single quotes on keys and simple string values
+        # F. Replace single quotes on keys and simple string values
         s_repaired = re.sub(r"(?<=[{,\s])'([a-zA-Z0-9_]+)'\s*:", r'"\1":', s_repaired)
 
-        # F. Close truncated curly braces if unclosed due to token cutoff
+        # G. Close truncated curly braces if unclosed due to token cutoff
         open_braces = s_repaired.count('{')
         close_braces = s_repaired.count('}')
         if open_braces > close_braces:
@@ -157,6 +172,7 @@ def parse_llm_json(text: str) -> Tuple[Optional[Dict[str, Any]], Dict[str, Any]]
         parsed = json.loads(s_repaired, strict=False)
         if isinstance(parsed, dict):
             audit["repair_success"] = True
+            audit["parse_status"] = "REPAIRED"
             return parsed, audit
     except Exception as e:
         audit["error_msg"] = str(e)

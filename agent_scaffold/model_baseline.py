@@ -48,6 +48,8 @@ def get_activation(act_name):
 class RotaryEmbedding(nn.Module):
     def __init__(self, dim, max_seq_len=512):
         super().__init__()
+        if dim % 2 != 0:
+            raise ValueError(f"RoPE requires an even head dimension, got d_k={dim}")
         inv_freq = 1.0 / (10000 ** (torch.arange(0, dim, 2).float() / dim))
         t = torch.arange(max_seq_len, dtype=torch.float)
         freqs = torch.outer(t, inv_freq)

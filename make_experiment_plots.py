@@ -332,8 +332,12 @@ plot_figure_1()
 def plot_figure_2():
     print("\n--- Generating Figure 2: Search Optimization Trajectories ---")
     fig, axes = plt.subplots(1, 3, figsize=(18, 5.2))
-    iterations = np.arange(11) # 0 to 10
     methods = ["random", "tpe", "evolutionary", "llm"]
+
+    # Derive dynamic trajectory length from data
+    sample_traj = comp_traces["dyck"]["llm"][0]["trajectory"]
+    k_len = len(sample_traj)
+    iterations = np.arange(k_len)
 
     # --- Panel A: Dyck-4 Trajectories (Mean +- 95% CI) ---
     ax_a = axes[0]
@@ -347,7 +351,7 @@ def plot_figure_2():
                   label=METHOD_LABELS[m], color=PALETTE[m], linewidth=2.4 if m=="llm" else 1.6)
         ax_a.fill_between(iterations, mean - ci95, mean + ci95, color=PALETTE[m], alpha=0.15)
 
-    ax_a.set_title("A. Dyck-4: Convergence Trajectory ($K=10$)\n(Mean $\\pm$ 95% Bootstrap CI, $N=10$ Seeds)")
+    ax_a.set_title(f"A. Dyck-4: Convergence Trajectory ($K={k_len-1}$)\n(Mean $\\pm$ 95% CI, $N={len(comp_traces['dyck']['llm'])}$ Seeds)")
     ax_a.set_xlabel("Search Horizon Iteration ($k$)")
     ax_a.set_ylabel("Best Validation Loss So Far ($L^*_k$)")
     ax_a.set_xticks(iterations)
@@ -366,7 +370,7 @@ def plot_figure_2():
                   label=METHOD_LABELS[m], color=PALETTE[m], linewidth=2.4 if m=="llm" else 1.6)
         ax_b.fill_between(iterations, mean - ci95, mean + ci95, color=PALETTE[m], alpha=0.15)
 
-    ax_b.set_title("B. Hidden FSM: Convergence Trajectory ($K=10$)\n(Mean $\\pm$ 95% Bootstrap CI, $N=10$ Seeds)")
+    ax_b.set_title(f"B. Hidden FSM: Convergence Trajectory ($K={k_len-1}$)\n(Mean $\\pm$ 95% CI, $N={len(comp_traces['fsm']['llm'])}$ Seeds)")
     ax_b.set_xlabel("Search Horizon Iteration ($k$)")
     ax_b.set_ylabel("Best Validation Loss So Far ($L^*_k$)")
     ax_b.set_xticks(iterations)
@@ -375,18 +379,21 @@ def plot_figure_2():
 
     # --- Panel C: Seed-Level Spaghetti Trajectories: LLM vs Random (Dyck-4) ---
     ax_c = axes[2]
-    llm_trajs = np.array([[step["best_val_loss"] for step in tr["trajectory"]] for tr in comp_traces["dyck"][m] for m in ["llm"]])
-    rnd_trajs = np.array([[step["best_val_loss"] for step in tr["trajectory"]] for tr in comp_traces["dyck"][m] for m in ["random"]])
+    llm_runs = comp_traces["dyck"]["llm"]
+    rnd_runs = comp_traces["dyck"]["random"]
+    llm_trajs = np.array([[step["best_val_loss"] for step in tr["trajectory"]] for tr in llm_runs])
+    rnd_trajs = np.array([[step["best_val_loss"] for step in tr["trajectory"]] for tr in rnd_runs])
 
     for s_idx in range(llm_trajs.shape[0]):
         ax_c.plot(iterations, llm_trajs[s_idx], color=PALETTE["llm"], alpha=0.25, lw=1.0)
         ax_c.plot(iterations, rnd_trajs[s_idx], color=PALETTE["random"], alpha=0.25, lw=1.0, linestyle="--")
 
     # Mean bold curves
-    ax_c.plot(iterations, np.mean(llm_trajs, axis=0), color=PALETTE["llm"], lw=3.0, label="LLM Agent (Mean, N=10)")
-    ax_c.plot(iterations, np.mean(rnd_trajs, axis=0), color=PALETTE["random"], lw=3.0, linestyle="--", label="Random Search (Mean, N=10)")
+    n_seeds = llm_trajs.shape[0]
+    ax_c.plot(iterations, np.mean(llm_trajs, axis=0), color=PALETTE["llm"], lw=3.0, label=f"LLM Agent (Mean, N={n_seeds})")
+    ax_c.plot(iterations, np.mean(rnd_trajs, axis=0), color=PALETTE["random"], lw=3.0, linestyle="--", label=f"Random Search (Mean, N={n_seeds})")
 
-    ax_c.set_title("C. Granular Multi-Seed Stability (Dyck-4)\n(All 10 Individual Seeds Spaghetti Overlay)")
+    ax_c.set_title(f"C. Granular Multi-Seed Stability (Dyck-4)\n(All {n_seeds} Individual Seeds Spaghetti Overlay)")
     ax_c.set_xlabel("Search Horizon Iteration ($k$)")
     ax_c.set_ylabel("Validation Loss ($L^*_k$)")
     ax_c.set_xticks(iterations)
