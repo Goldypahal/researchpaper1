@@ -1,4 +1,4 @@
-"""
+r"""
 tests/test_airtight_correctness.py
 
 Comprehensive Phase 3 unit test suite covering:
@@ -13,8 +13,16 @@ Comprehensive Phase 3 unit test suite covering:
 """
 
 import os
+import sys
 import re
 import json
+from pathlib import Path
+
+# Ensure repository root is on sys.path
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import pytest
 import torch
 
